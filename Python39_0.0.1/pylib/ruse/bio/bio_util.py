@@ -19,8 +19,8 @@ from Bio.SeqRecord import SeqRecord
 
 from ruse.util.data_table import ColumnInfo, ColumnDataType
 
-# IUPAC ambiguous DNA with gap
-DNA_ALPHABET = 'GATCRYWSMKHBVDN-'
+# IUPAC ambiguous RNA/DNA with gap
+DNA_ALPHABET = 'GATUCRYWSMKHBVDN-'
 # IUPAC extended protein with gap and stop (no 3 letter codes)
 # Also incomplete codon '_'
 PROTEIN_ALPHABET = 'ACDEFGHIKLMNPQRSTVWYBXZJUO-*_'
@@ -43,6 +43,17 @@ def is_dna(seq: str) -> bool:
         if b not in DNA_ALPHABET:
             return False
     return True
+
+
+def is_dna_record(rec: SeqRecord):
+    if 'molecule_type' in rec.annotations:
+        molecule_type = rec.annotations['molecule_type'].upper()
+        if 'DNA' in molecule_type:
+            return True
+        if 'RNA' in molecule_type:
+            return True
+        return False
+    return is_dna(rec.seq)
 
 
 def is_protein(seq: str) -> bool:
