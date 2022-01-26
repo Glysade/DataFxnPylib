@@ -1,6 +1,5 @@
-from typing import List
+from typing import List, Optional
 
-from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
 from df.data_transfer import ColumnData, DataType
@@ -8,7 +7,7 @@ from ruse.bio.bio_data_table_helper import genbank_base64_str_to_sequence, seque
     string_to_sequence
 
 
-def values_to_sequences(column: ColumnData) -> List[SeqRecord]:
+def values_to_sequences(column: ColumnData) -> List[Optional[SeqRecord]]:
     content_type = column.contentType
     if content_type == 'chemical/x-sequence':
         sequences = [string_to_sequence(s, index) if s else None for (index, s) in
@@ -21,7 +20,7 @@ def values_to_sequences(column: ColumnData) -> List[SeqRecord]:
     return sequences
 
 
-def sequences_to_column(sequences: List[SeqRecord], column_name: str, genbank_output=True) -> ColumnData:
+def sequences_to_column(sequences: List[Optional[SeqRecord]], column_name: str, genbank_output=True) -> ColumnData:
     def encode_seq(seq):
         if not seq:
             return None

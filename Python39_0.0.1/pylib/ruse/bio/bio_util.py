@@ -40,7 +40,7 @@ def is_dna(seq: str) -> bool:
     """
 
     for b in seq:
-        if b not in DNA_ALPHABET:
+        if b.upper() not in DNA_ALPHABET:
             return False
     return True
 
@@ -66,7 +66,7 @@ def is_protein(seq: str) -> bool:
     """
 
     for b in seq:
-        if b not in PROTEIN_ALPHABET:
+        if b.upper() not in PROTEIN_ALPHABET:
             return False
     return True
 
