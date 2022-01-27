@@ -69,6 +69,7 @@ class DataFunctionRequest(BaseModel):
     inputFields: Dict[str, InputField] = {}
     serviceName: str
     id: str
+    script: Optional[str]
 
 
 class DataFunctionResponse(BaseModel):

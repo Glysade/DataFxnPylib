@@ -20,16 +20,16 @@ class DataFunctions(object):
             id = request.id
 
             print(f'Processing request {id}')
-            # with open(f'{id}.in', 'w') as fh:
-            #    fh.write(request_json)
-            class_name = request.serviceName
-            module = importlib.import_module(f'df.{class_name}')
-            class_ = getattr(module, class_name)
-            df = class_()  # type: DataFunction
-            response = df.execute(request)
+            if request.script:
+                exec(request.script, globals())
+                response = execute(request)
+            else:
+                class_name = request.serviceName
+                module = importlib.import_module(f'df.{class_name}')
+                class_ = getattr(module, class_name)
+                df = class_()  # type: DataFunction
+                response = df.execute(request)
             response_json = response.json()
-            # with open(f'{id}.out', 'w') as fh:
-            #    fh.write(response_json)
             return response_json
         except Exception as ex:
             traceback.print_exc()
