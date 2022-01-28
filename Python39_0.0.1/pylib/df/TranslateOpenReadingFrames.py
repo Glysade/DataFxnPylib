@@ -1,0 +1,75 @@
+from Bio.Data import CodonTable
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
+
+from df.bio_helper import values_to_sequences, sequences_to_column
+from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResponse, ColumnData, DataType, TableData, \
+    integer_input_field, string_input_field
+
+
+# adapted from BioPython tutorial
+def find_orfs_with_trans(seq: Seq, min_protein_length: int = 50,
+                         trans_table: str = 'Standard'):
+    answer = []
+    seq_len = len(seq)
+    for strand, nuc in [(+1, seq), (-1, seq.reverse_complement())]:
+        for frame in range(3):
+            trans = nuc[frame:].translate(trans_table)
+            trans_len = len(trans)
+            aa_start = 0
+            aa_end = 0
+            while aa_start < trans_len:
+                aa_end = trans.find("*", aa_start)
+                if aa_end == -1:
+                    aa_end = trans_len
+                if aa_end - aa_start >= min_protein_length:
+                    if strand == 1:
+                        start = frame + aa_start * 3
+                        end = min(seq_len, frame + aa_end * 3 + 3)
+                    else:
+                        start = seq_len - frame - aa_end * 3 - 3
+                        end = seq_len - frame - aa_start * 3
+                    answer.append((start, end, strand, trans[aa_start:aa_end]))
+                aa_start = aa_end + 1
+    answer.sort()
+    return answer
+
+
+class TranslateOpenReadingFrames(DataFunction):
+    def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
+        input_column = next(iter(request.inputColumns.values()))
+        min_protein_length = integer_input_field(request, 'minimumProteinLength', 100)
+        codon_table_name = string_input_field(request, 'codonTableName', 'Standard')
+        input_sequences = values_to_sequences(input_column)
+
+        sequence_number = []
+        sequence_id = []
+        sequence = []
+        length = []
+        strands = []
+        starts = []
+        ends = []
+
+        for index, seq in enumerate(input_sequences):
+            proteins = find_orfs_with_trans(seq.seq, min_protein_length, codon_table_name)
+            for start, end, strand, pro in proteins:
+                sequence_number.append(index + 1)
+                sequence_id.append(seq.id)
+                sequence.append(SeqRecord(pro))
+                strands.append('+' if strand == 1 else '-')
+                length.append(len(pro))
+                starts.append(start)
+                ends.append(end)
+
+        protein_column = sequences_to_column(sequence, 'Protein', genbank_output=False)
+        output_columns = [
+            ColumnData(name='Sequence Number', dataType=DataType.INTEGER, values=sequence_number),
+            ColumnData(name='Sequence Id', dataType=DataType.STRING, values=sequence_id),
+            protein_column,
+            ColumnData(name='Length', dataType=DataType.INTEGER, values=length),
+            ColumnData(name='Strand', dataType=DataType.STRING, values=strands),
+            ColumnData(name='Start', dataType=DataType.INTEGER, values=starts),
+            ColumnData(name='End', dataType=DataType.INTEGER, values=ends)
+        ]
+        output_table = TableData(tableName='Open Reading Frames', columns=output_columns)
+        return DataFunctionResponse(outputTables=[output_table])
