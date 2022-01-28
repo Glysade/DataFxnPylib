@@ -3,8 +3,8 @@ from Bio.SeqFeature import SeqFeature, FeatureLocation
 from Bio.SeqRecord import SeqRecord
 
 from df.bio_helper import values_to_sequences
-from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResponse, string_input_field, ColumnData, \
-    DataType
+from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResponse, ColumnData, \
+    DataType, string_list_input_field
 from ruse.bio.bio_data_table_helper import sequence_to_genbank_base64_str
 from ruse.bio.bio_util import is_dna_record
 
@@ -30,13 +30,12 @@ def search_sequence(rec: SeqRecord, rb: RestrictionBatch) -> SeqRecord:
 class EnzymeRestriction(DataFunction):
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
-        enzyme_var = string_input_field(request, 'enzymes')
-        if not enzyme_var:
+        enzyme_names = string_list_input_field(request, 'enzymes')
+        if not enzyme_names:
             raise ValueError
-        enzyme_names = [n.strip() for n in enzyme_var.split(',')]
-        if len(enzyme_names) == 1 and enzyme_names[0].lower() == 'all':
+        if 'All' in enzyme_names:
             rb = AllEnzymes
-        elif len(enzyme_names) == 1 and enzyme_names[0].lower() == 'common':
+        elif 'Common' in enzyme_names:
             rb = CommOnly
         else:
             for name in enzyme_names:
