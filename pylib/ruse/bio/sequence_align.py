@@ -12,7 +12,7 @@ A classs to handle multiple sequence alignment (MSA)
 import os
 import uuid
 from enum import Enum
-from typing import Union, List, Dict, Tuple
+from typing import Union, List, Dict, Tuple, Optional
 
 from Bio import AlignIO, Phylo
 from Bio import SeqIO
@@ -202,12 +202,33 @@ def copy_features_to_aligned_sequence(in_seq: SeqRecord, out_seq: SeqRecord, loc
         start = str(in_seq.seq).index(ungapped)
         end = start + len(ungapped)
         in_seq = in_seq[start:end]
+    # when mapping from in_seq to out_seq account for gaps in both sequences
     in_position = 0
     new_positions = [None] * (len(in_seq) + 1)
     for out_position, nt in enumerate(out_seq.seq):
+        if in_position == len(in_seq):
+            break
+        in_nt = in_seq[in_position]
+        while in_nt == '-':
+            new_positions[in_position] = -1
+            in_position += 1
+            if in_position == len(in_seq):
+                break
+            in_nt = in_seq[in_position]
         if nt != '-':
+            if nt != in_nt:
+                raise ValueError('copy_features_to_aligned_sequence: sequence does not match')
             new_positions[in_position] = out_position
             in_position += 1
+            if in_position == len(in_seq):
+                break
+    while in_position < len(in_seq):
+        in_nt = in_seq[in_position]
+        if in_nt != '-':
+            raise ValueError('copy_features_to_aligned_sequence: sequence does not match')
+        new_positions[in_position] = -1
+        in_position += 1
+
     new_positions[len(in_seq)] = new_positions[in_position - 1] + 1
     _build_new_features(in_seq, out_seq, new_positions)
 
@@ -223,21 +244,25 @@ def _build_new_features(in_seq: SeqRecord, out_seq: SeqRecord, new_positions: Li
 
     for feature in in_seq.features:
         old_location = feature.location
+        new_location = None
         if isinstance(old_location, CompoundLocation):
-            new_location = CompoundLocation([_adjust_location(l, new_positions) for l in old_location.parts],
-                                            old_location.operator)
+            new_parts = [_adjust_location(l, new_positions) for l in old_location.parts]
+            if all(new_parts):
+                new_location = CompoundLocation([_adjust_location(l, new_positions) for l in old_location.parts],
+                                                old_location.operator)
         else:
             new_location = _adjust_location(old_location, new_positions)
-        new_feature = SeqFeature(location=new_location, type=feature.type,
-                                 location_operator=feature.location_operator,
-                                 id=feature.id, qualifiers=dict(feature.qualifiers.items()))
-        out_seq.features.append(new_feature)
+        if new_location is not None:
+            new_feature = SeqFeature(location=new_location, type=feature.type,
+                                     location_operator=feature.location_operator,
+                                     id=feature.id, qualifiers=dict(feature.qualifiers.items()))
+            out_seq.features.append(new_feature)
 
     out_seq.dbxrefs = in_seq.dbxrefs[:]
     out_seq.annotations = in_seq.annotations.copy()
 
 
-def _adjust_location(location: FeatureLocation, new_positions: List[int]) -> FeatureLocation:
+def _adjust_location(location: FeatureLocation, new_positions: List[int]) -> Optional[FeatureLocation]:
     """
     Determines a feature location in the aligned sequence
 
@@ -247,6 +272,8 @@ def _adjust_location(location: FeatureLocation, new_positions: List[int]) -> Fea
     """
 
     new_start = _adjust_position(location.start, new_positions)
+    if not new_start:
+        return None
     # biopython end is exclusive, but I'm not sure what to do if the end position is not exact
     end = location.end
     if isinstance(end, ExactPosition):
@@ -255,10 +282,12 @@ def _adjust_location(location: FeatureLocation, new_positions: List[int]) -> Fea
         new_end = ExactPosition(new_end + 1)
     else:
         new_end = _adjust_position(location.end, new_positions)
+    if not new_end:
+        return None
     return FeatureLocation(new_start, new_end, location.strand)
 
 
-def _adjust_position(position: AbstractPosition, new_positions: List[int]) -> AbstractPosition:
+def _adjust_position(position: AbstractPosition, new_positions: List[int]) -> Optional[AbstractPosition]:
     """
     Maps a sequence position from the input sequence to the  aligned sequence
 
@@ -267,31 +296,33 @@ def _adjust_position(position: AbstractPosition, new_positions: List[int]) -> Ab
     :return:  The equivalent position in the aligned sequence
     """
 
+    new_position = new_positions[position]
+    if new_position == -1:
+        return None
     if isinstance(position, AfterPosition):
-        new_position = new_positions[position]
         return AfterPosition(new_position)
 
     elif isinstance(position, BeforePosition):
-        new_position = new_positions[position]
         return BeforePosition(new_position)
 
     elif isinstance(position, BetweenPosition):
         # this class may be obsolete
         # this code path has not been tested
-        new_position = new_positions[position]
         new_left = new_positions[position._left]
         new_right = new_positions[position._right]
+        if new_left == -1 or new_right == -1:
+            return None;
         return BetweenPosition(new_position, new_left, new_right)
 
     elif isinstance(position, ExactPosition):
-        new_position = new_positions[position]
         return ExactPosition(new_position)
 
     elif isinstance(position, OneOfPosition):
         # this code path has not been tested
         old_choices = position.position_choices
         new_choices = [_adjust_position(old_choice, new_positions) for old_choice in old_choices]
-        new_position = new_positions[position]
+        if not all(new_choices):
+            return None
         return OneOfPosition(new_position, new_choices)
 
     elif isinstance(position, UnknownPosition):
@@ -300,9 +331,10 @@ def _adjust_position(position: AbstractPosition, new_positions: List[int]) -> Ab
 
     elif isinstance(position, WithinPosition):
         # this code path has not been tested
-        new_position = new_positions[position]
         new_left = new_positions[position._left]
         new_right = new_positions[position._right]
+        if new_left == -1 or new_right == -1:
+            return None;
         return WithinPosition(new_position, new_left, new_right)
 
     raise ValueError
