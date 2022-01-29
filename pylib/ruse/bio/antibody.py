@@ -2,14 +2,13 @@ import collections
 import os
 import re
 import uuid
-from typing import List, NamedTuple, Optional, Tuple, Dict
+from typing import List, NamedTuple, Optional, Dict
 
 from Bio.SeqFeature import FeatureLocation, SeqFeature
+from Bio.SeqRecord import SeqRecord
 
 from ruse.bio.applications import AnarciCommandLine
 from ruse.bio.bio_util import sequences_to_file
-from Bio.SeqRecord import SeqRecord
-
 from ruse.bio.sequence_align import copy_features_to_aligned_sequence
 
 
@@ -180,7 +179,8 @@ def _do_align_antibody_sequences(sequences: List[SeqRecord],
         aligned_seqs[seq_no] += sequence[pos:]
         aligned_seqs[seq_no] += '-' * padding
 
-    aligned_records = [SeqRecord(id=s.id, name=s.name, seq=seq, annotations={'molecule_type': 'protein'}) for s, seq in zip(sequences, aligned_seqs)]
+    aligned_records = [SeqRecord(id=s.id, name=s.name, seq=seq, annotations={'molecule_type': 'protein'}) for s, seq in
+                       zip(sequences, aligned_seqs)]
     for init, align in zip(sequences, aligned_records):
         copy_features_to_aligned_sequence(init, align)
 
@@ -305,8 +305,6 @@ def _find_all_regions(mapping: List[AntibodyNumber], mapping_scheme: str,
         filtered_mapping = [m for m in mapping if m.domain == domain]
         return _find_regions(filtered_mapping, mapping_scheme, match_scheme)
 
-    if not match_scheme:
-        match_scheme = mapping_scheme
     domains = set((m.domain for m in mapping))
     regions = [i for d in domains for i in regions_in_domain(d) if i]
     return regions
@@ -315,32 +313,41 @@ def _find_all_regions(mapping: List[AntibodyNumber], mapping_scheme: str,
 def _find_regions(mapping: List[AntibodyNumber], mapping_scheme: str,
                   match_scheme: str = None) -> List[Optional[ChainRegions]]:
     if not match_scheme:
-        match_scheme = mapping_scheme
+        if mapping_scheme == 'imgt':
+            match_scheme = 'imgt'
+        elif mapping_scheme == 'kabat':
+            match_scheme = 'kabat'
+        else:
+            match_scheme = 'chothia'
 
-    # see CDR definitions in http://www.bioinf.org.uk/abs/#chothianum
-    check_fn = lambda x: x in ['chothia', 'kabat']
-    assert check_fn(mapping_scheme)
-    assert check_fn(match_scheme)
+    # see CDR definitions in http://www.bioinf.org.uk/abs/info.html#cdrdef
+    # This table is a little unclear as the end of H1 is not specified if the numbering is neither Kabat or Chothia
+    # I have assumed that we use Chothia for everything except Kabat
+
+    # mapping_scheme numbers residues
+    # match_scheme assigns regions
+
+    # the Wolfguy numbering is not supported
+    assert mapping_scheme in ['chothia', 'kabat', 'imgt', 'martin', 'aho']
+    assert match_scheme in ['chothia', 'kabat', 'imgt']
     regions = list()
 
     if match_scheme == 'kabat':
 
-        r = _find_chain_regions(mapping, 'L', 'L24', 'L34', 'L50', 'L56', 'L89', 'L97', match_scheme)
+        r = _find_chain_regions(mapping, 'L', 'L24', 'L34', 'L50', 'L56', 'L89', 'L97')
         regions.append(r)
 
         if mapping_scheme == 'kabat':
             h1_end = 'H35B'
-        elif mapping_scheme == 'chothia':
-            h1_end = 'H35'
         else:
-            raise ValueError()
+            h1_end = 'H35'
 
-        r = _find_chain_regions(mapping, 'H', 'H31', h1_end, 'H50', 'H65', 'H95', 'H102', match_scheme)
+        r = _find_chain_regions(mapping, 'H', 'H31', h1_end, 'H50', 'H65', 'H95', 'H102')
         regions.append(r)
 
     elif match_scheme == 'chothia':
 
-        r = _find_chain_regions(mapping, 'L', 'L24', 'L34', 'L50', 'L56', 'L89', 'L97', match_scheme)
+        r = _find_chain_regions(mapping, 'L', 'L24', 'L34', 'L50', 'L56', 'L89', 'L97')
         regions.append(r)
 
         if mapping_scheme == 'kabat':
@@ -356,12 +363,22 @@ def _find_regions(mapping: List[AntibodyNumber], mapping_scheme: str,
                 h1_end = 'H33'
             else:
                 raise ValueError()
-        elif mapping_scheme == 'chothia':
-            h1_end = 'H32'
         else:
-            raise ValueError()
+            h1_end = 'H32'
 
-        r = _find_chain_regions(mapping, 'H', 'H26', h1_end, 'H52', 'H56', 'H95', 'H102', match_scheme)
+        r = _find_chain_regions(mapping, 'H', 'H26', h1_end, 'H52', 'H56', 'H95', 'H102')
+        regions.append(r)
+
+    elif match_scheme == 'imgt':
+
+        r = _find_chain_regions(mapping, 'L', 'L27', 'L32', 'L50', 'L51', 'L89', 'L97')
+        regions.append(r)
+
+        if mapping_scheme == 'kabat':
+            h1_end = 'H35B'
+        else:
+            h1_end = 'H33'
+        r = _find_chain_regions(mapping, 'H', 'H26', h1_end, 'H51', 'H56', 'H93', 'H102')
         regions.append(r)
 
     else:
@@ -372,8 +389,6 @@ def _find_regions(mapping: List[AntibodyNumber], mapping_scheme: str,
 
 def _annotate_sequence(record: SeqRecord, number_mapping: List[AntibodyNumberMapping], mapping_scheme: str,
                        match_scheme: str = None):
-    if not match_scheme:
-        match_scheme = mapping_scheme
     mapping = [n.to_antibody_number() for n in number_mapping]
     all_regions = _find_all_regions(mapping, mapping_scheme, match_scheme)
     for region in all_regions:
@@ -391,47 +406,54 @@ def _annotate_sequence(record: SeqRecord, number_mapping: List[AntibodyNumberMap
         if not start1 or not end1 or not start2 or not end2 or not start3 or not end3:
             return
 
-        name = '{}FR1'.format(chain)
-        fr1_feature = SeqFeature(FeatureLocation(start, start1), type='region',
-                                 qualifiers={'note': ['antibody_label: {}'.format(name),
-                                                      'antibody_scheme: {}'.format(match_scheme)]})
-        record.features.append(fr1_feature)
+        if start <= start1:
+            name = '{}FR1'.format(chain)
+            fr1_feature = SeqFeature(FeatureLocation(start, start1), type='region',
+                                     qualifiers={'note': ['antibody_label: {}'.format(name),
+                                                          'antibody_scheme: {}'.format(match_scheme)]})
+            record.features.append(fr1_feature)
 
-        name = 'CDR-{}1'.format(chain)
-        h1_feature = SeqFeature(FeatureLocation(start1, end1 + 1), type='region',
-                                qualifiers={'note': ['antibody_label: {}'.format(name),
-                                                     'antibody_scheme: {}'.format(match_scheme)]})
-        record.features.append(h1_feature)
+        if start1 <= end1 + 1:
+            name = 'CDR-{}1'.format(chain)
+            h1_feature = SeqFeature(FeatureLocation(start1, end1 + 1), type='region',
+                                    qualifiers={'note': ['antibody_label: {}'.format(name),
+                                                         'antibody_scheme: {}'.format(match_scheme)]})
+            record.features.append(h1_feature)
 
-        name = '{}FR2'.format(chain)
-        fr1_feature = SeqFeature(FeatureLocation(end1 + 1, start2), type='region',
-                                 qualifiers={'note': ['antibody_label: {}'.format(name),
-                                                      'antibody_scheme: {}'.format(match_scheme)]})
-        record.features.append(fr1_feature)
+        if end1 + 1 <= start2:
+            name = '{}FR2'.format(chain)
+            fr1_feature = SeqFeature(FeatureLocation(end1 + 1, start2), type='region',
+                                     qualifiers={'note': ['antibody_label: {}'.format(name),
+                                                          'antibody_scheme: {}'.format(match_scheme)]})
+            record.features.append(fr1_feature)
 
-        name = 'CDR-{}2'.format(chain)
-        h1_feature = SeqFeature(FeatureLocation(start2, end2 + 1), type='region',
-                                qualifiers={'note': ['antibody_label: {}'.format(name),
-                                                     'antibody_scheme: {}'.format(match_scheme)]})
-        record.features.append(h1_feature)
+        if start2 <= end2 + 1:
+            name = 'CDR-{}2'.format(chain)
+            h1_feature = SeqFeature(FeatureLocation(start2, end2 + 1), type='region',
+                                    qualifiers={'note': ['antibody_label: {}'.format(name),
+                                                         'antibody_scheme: {}'.format(match_scheme)]})
+            record.features.append(h1_feature)
 
-        name = '{}FR3'.format(chain)
-        fr1_feature = SeqFeature(FeatureLocation(end2 + 1, start3), type='region',
-                                 qualifiers={'note': ['antibody_label: {}'.format(name),
-                                                      'antibody_scheme: {}'.format(match_scheme)]})
-        record.features.append(fr1_feature)
+        if end2 + 1 <= start3:
+            name = '{}FR3'.format(chain)
+            fr1_feature = SeqFeature(FeatureLocation(end2 + 1, start3), type='region',
+                                     qualifiers={'note': ['antibody_label: {}'.format(name),
+                                                          'antibody_scheme: {}'.format(match_scheme)]})
+            record.features.append(fr1_feature)
 
-        name = 'CDR-{}3'.format(chain)
-        h1_feature = SeqFeature(FeatureLocation(start3, end3 + 1), type='region',
-                                qualifiers={'note': ['antibody_label: {}'.format(name),
-                                                     'antibody_scheme: {}'.format(match_scheme)]})
-        record.features.append(h1_feature)
+        if start3 <= end3 + 1:
+            name = 'CDR-{}3'.format(chain)
+            h1_feature = SeqFeature(FeatureLocation(start3, end3 + 1), type='region',
+                                    qualifiers={'note': ['antibody_label: {}'.format(name),
+                                                         'antibody_scheme: {}'.format(match_scheme)]})
+            record.features.append(h1_feature)
 
-        name = '{}FR4'.format(chain)
-        fr1_feature = SeqFeature(FeatureLocation(end3 + 1, end + 1), type='region',
-                                 qualifiers={'note': ['antibody_label: {}'.format(name),
-                                                      'antibody_scheme: {}'.format(match_scheme)]})
-        record.features.append(fr1_feature)
+        if end3 + 1 <= end + 1:
+            name = '{}FR4'.format(chain)
+            fr1_feature = SeqFeature(FeatureLocation(end3 + 1, end + 1), type='region',
+                                     qualifiers={'note': ['antibody_label: {}'.format(name),
+                                                          'antibody_scheme: {}'.format(match_scheme)]})
+            record.features.append(fr1_feature)
 
     for num in mapping:
         if num.query_position is not None:
@@ -442,7 +464,7 @@ def _annotate_sequence(record: SeqRecord, number_mapping: List[AntibodyNumberMap
 
 
 def _find_chain_regions(mapping: List[AntibodyNumber], chain: str, start1: str, end1: str,
-                        start2: str, end2: str, start3: str, end3: str, scheme: str) -> Optional[ChainRegions]:
+                        start2: str, end2: str, start3: str, end3: str) -> Optional[ChainRegions]:
     start = _find_antibody_number(mapping, chain)
     end = _find_antibody_number(mapping, chain, last=True)
 
