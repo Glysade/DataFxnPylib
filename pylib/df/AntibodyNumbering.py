@@ -12,8 +12,17 @@ class AntibodyNumbering(DataFunction):
         input_column = next(iter(request.inputColumns.values()))
         input_column.remove_nulls()
         input_sequences = values_to_sequences(input_column)
-        scheme = string_input_field(request, 'scheme', 'chothia')
-        align_information = align_antibody_sequences(input_sequences, scheme)
+        numbering_scheme = string_input_field(request, 'numberingScheme', 'chothia')
+        cdr_definition = string_input_field(request, 'cdrDefinition', 'chothia')
+        if not cdr_definition:
+            if numbering_scheme == 'imgt':
+                cdr_definition = 'imgt'
+            elif numbering_scheme == 'kabat':
+                cdr_definition = 'kabat'
+            else:
+                cdr_definition = 'chothia'
+
+        align_information = align_antibody_sequences(input_sequences, numbering_scheme, cdr_definition)
         output_sequences = align_information.aligned_sequences
         numbering = align_information.numbering
         regions = align_information.regions
@@ -21,7 +30,7 @@ class AntibodyNumbering(DataFunction):
         numbering_data = [{'domain': n.domain, 'position': n.query_position, 'label': n.label()} for n in numbering]
         region_data = [r.to_data() for r in regions]
         antibody_numbering = {
-            'scheme': scheme,
+            'scheme': numbering_scheme,
             'numbering': numbering_data,
             'regions': region_data
         }
