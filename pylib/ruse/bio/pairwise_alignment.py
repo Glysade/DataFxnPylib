@@ -9,7 +9,7 @@ from Bio.Emboss.Applications import NeedleCommandline, WaterCommandline, Stretch
 from Bio.SeqRecord import SeqRecord
 
 from ruse.bio.bio_data_table_helper import add_sequences_to_data_table, add_sequences_to_data_table_as_genbank_column
-from ruse.bio.sequence_align import copy_features_to_aligned_sequence
+from ruse.bio.sequence_align import copy_features_to_gapped_sequence
 from ruse.util.data_table import DataTable
 from ruse.util.util import get_memory_in_gb
 
@@ -42,9 +42,9 @@ def _to_pairwise_alignment(query, align, target, local):
     aligned_query = aligned_sequences[0]
     aligned_target = aligned_sequences[1]
     if query.features:
-        copy_features_to_aligned_sequence(query, aligned_query, local)
+        copy_features_to_gapped_sequence(query, aligned_query, local)
     if target.features:
-        copy_features_to_aligned_sequence(target, aligned_target, local)
+        copy_features_to_gapped_sequence(target, aligned_target, local)
     score = align.annotations['score']
     return PairwiseAlignment(score, aligned_query, aligned_target)
 

@@ -1,13 +1,14 @@
 from typing import List, Optional
 
-from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
+from df.bio_helper import sequences_to_column, query_from_request
 from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResponse, string_input_field, \
-    integer_input_field, ColumnData, DataType, TableData
+    integer_input_field, ColumnData, DataType, TableData, boolean_input_field
+from ruse.bio.antibody import numbering_and_regions_from_sequence, ANTIBODY_NUMBERING_COLUMN_PROPERTY
 from ruse.bio.bio_data_table_helper import sequence_to_genbank_base64_str
 from ruse.bio.bio_util import is_defined_sequence
-from ruse.bio.blast_parse import MultipleBlastResults
+from ruse.bio.blast_parse import MultipleBlastResults, build_common_alignments
 from ruse.bio.blast_search import BlastSearch, BlastSearchType
 from ruse.bio.blast_utils import blast_databases_list
 from ruse.util.log import error
@@ -18,7 +19,11 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest,
     database_name = string_input_field(request, 'databaseName')
     method = string_input_field(request, 'method')
     max_hits = integer_input_field(request, 'maxHits')
-
+    show_multiple_alignments = boolean_input_field(request, 'showMultipleAlignments', False)
+    if len(sequences) > 1:
+        show_multiple_alignments = False
+    if method in ['TBLASTX', 'BLASTX']:
+        show_multiple_alignments = False
     search = BlastSearch()
     options = {}
     if max_hits:
@@ -34,7 +39,7 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest,
 
     search.multiple_query_search_blast_database(sequences, database_name, search_type, None, options)
     if search.error is not None:
-        return {'error': search.error}
+        raise ValueError(f'Blast search failed with error {search.error}')
     results = MultipleBlastResults()
     results.parse(search.output_file())
 
@@ -48,8 +53,6 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest,
     assert len(sequences) == len(results.query_hits)
 
     alignments = []
-    query_ids = []
-    query_definitions = []
     target_ids = []
     target_definitions = []
     e_values = []
@@ -57,6 +60,17 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest,
     bits = []
     query_sequences = []
     target_sequences = []
+    multiple_alignments = []
+    if show_multiple_alignments:
+        alignments.append(None)
+        target_ids.append(None)
+        target_definitions.append(None)
+        target_definitions.append(None)
+        e_values.append(None)
+        scores.append(None)
+        bits.append(None)
+        query_sequences.append(None)
+        target_sequences.append(None)
 
     for query_sequence, query_result in zip(sequences, results.query_hits):
         query_seq_str = sequence_to_genbank_base64_str(query_sequence) if genbank else str(
@@ -70,8 +84,6 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest,
                 hit_seq_str = None
 
             alignments.append(align_str)
-            query_ids.append(query_result.query_id)
-            query_definitions.append(query_result.query_def)
             target_ids.append(hit.target_id)
             target_definitions.append(hit.target_def)
             e_values.append(hit.evalue)
@@ -80,12 +92,12 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest,
             query_sequences.append(query_seq_str)
             target_sequences.append(hit_seq_str)
 
+        if show_multiple_alignments:
+            multiple_alignments = build_common_alignments(query_sequence, query_result.hits)
+
     sequence_data_type = DataType.BINARY if genbank else DataType.STRING
-    aligned_sequences_column = ColumnData(name='Aligned Sequence', dataType=DataType.STRING,
+    aligned_sequences_column = ColumnData(name='Aligned Sequence Pairs', dataType=DataType.STRING,
                                           contentType='chemical/x-sequence-pair', values=alignments)
-    query_id_column = ColumnData(name='Query Id', dataType=DataType.STRING, values=query_ids)
-    query_definition_column = ColumnData(name='Query Definition', dataType=DataType.STRING,
-                                         values=query_definitions)
     target_id_column = ColumnData(name='Target Id', dataType=DataType.STRING, values=target_ids)
     target_definition_column = ColumnData(name='Target Definition', dataType=DataType.STRING,
                                           values=target_definitions)
@@ -96,12 +108,19 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest,
                                        contentType=sequence_column_type, values=query_sequences)
     target_sequence_column = ColumnData(name='Target Sequence', dataType=sequence_data_type,
                                         contentType=sequence_column_type, values=target_sequences)
+    columns = [aligned_sequences_column,
+               target_id_column,
+               target_definition_column, e_value_column, score_column, bit_column,
+               query_sequence_column,
+               target_sequence_column]
+    if show_multiple_alignments:
+        multiple_alignment_column = sequences_to_column(multiple_alignments, 'Aligned Sequence', True)
+        antibody_numbering = numbering_and_regions_from_sequence(multiple_alignments[0])
+        if antibody_numbering:
+            multiple_alignment_column.properties[ANTIBODY_NUMBERING_COLUMN_PROPERTY] = antibody_numbering.to_column_json()
+        columns.insert(0, multiple_alignment_column)
     output_table = TableData(tableName='Blast search results',
-                             columns=[aligned_sequences_column, query_id_column, query_definition_column,
-                                      target_id_column,
-                                      target_definition_column, e_value_column, score_column, bit_column,
-                                      query_sequence_column,
-                                      target_sequence_column])
+                             columns=columns)
     response = DataFunctionResponse(outputTables=[output_table])
     return response
 
@@ -109,8 +128,5 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest,
 class BlastLocalTextSearch(DataFunction):
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
-        query = string_input_field(request, 'query')
-        if not query:
-            raise ValueError()
-        sequence = SeqRecord(Seq(query), 'Query')
-        return run_blast_search([sequence], request)
+        query_sequence = query_from_request(request)
+        return run_blast_search([query_sequence], request)

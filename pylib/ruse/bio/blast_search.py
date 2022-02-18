@@ -90,7 +90,7 @@ class BlastDatabase(Frozen):
         :return: the name of the database
         """
 
-        sequences = [s for s in sequences if ok_sequence(s)]
+        sequences = [SeqRecord(s.seq.ungap(), s.id, s.name, s.description) for s in sequences if ok_sequence(s)]
         fasta_file = "{}.fasta".format(str(uuid.uuid4()))
         with open(fasta_file, 'w') as f:
             SeqIO.write(sequences, f, "fasta")
@@ -294,8 +294,9 @@ class BlastSearch(Frozen):
         self.search_name = search_name
 
         fasta_file = "{}.fasta".format(search_name)
+        blast_queries = [SeqRecord(q.seq.ungap(), q.id, q.name, q.description) for q in queries]
         with open(fasta_file, 'w') as f:
-            SeqIO.write(queries, f, "fasta")
+            SeqIO.write(blast_queries, f, "fasta")
         output_file = self.output_file()
 
         # local import to prevent circular errors

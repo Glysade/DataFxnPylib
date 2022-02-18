@@ -3,7 +3,7 @@ import json
 from df.bio_helper import values_to_sequences
 from df.data_transfer import ColumnData, DataFunctionRequest, DataFunctionResponse, DataFunction, string_input_field, \
     DataType
-from ruse.bio.antibody import align_antibody_sequences
+from ruse.bio.antibody import align_antibody_sequences, ANTIBODY_NUMBERING_COLUMN_PROPERTY
 from ruse.bio.bio_data_table_helper import sequence_to_genbank_base64_str
 
 
@@ -24,20 +24,10 @@ class AntibodyNumbering(DataFunction):
 
         align_information = align_antibody_sequences(input_sequences, numbering_scheme, cdr_definition)
         output_sequences = align_information.aligned_sequences
-        numbering = align_information.numbering
-        regions = align_information.regions
-
-        numbering_data = [{'domain': n.domain, 'position': n.query_position, 'label': n.label()} for n in numbering]
-        region_data = [r.to_data() for r in regions]
-        antibody_numbering = {
-            'scheme': numbering_scheme,
-            'numbering': numbering_data,
-            'regions': region_data
-        }
-        numbering_json = json.dumps(antibody_numbering)
+        numbering_json = align_information.to_column_json()
 
         rows = [sequence_to_genbank_base64_str(s) for s in output_sequences]
-        properties = {'antibodyNumbering': numbering_json}
+        properties = {ANTIBODY_NUMBERING_COLUMN_PROPERTY: numbering_json}
         output_column = ColumnData(name='Aligned Sequence', dataType=DataType.BINARY, properties=properties,
                                    contentType='chemical/x-genbank', values=rows)
         output_column.insert_nulls(input_column.missing_null_positions)

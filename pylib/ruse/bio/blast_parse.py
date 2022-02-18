@@ -8,17 +8,23 @@ Copyright (C) 2017 Anodyne Informatics, LLC
 Classes for parsing the results from Blast searches
 """
 
+from __future__ import annotations
 import re
-from typing import List, Dict, Union, Optional
+from io import StringIO
+from typing import List, Dict, Union, Optional, TYPE_CHECKING
 
 from Bio import Entrez
 from Bio.Blast import NCBIXML
+from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio.SeqUtils import nt_search
 
 from ruse.bio.bio_util import entrez_email, is_defined_sequence
 from ruse.bio.blast_search import BlastSearchType
 from ruse.bio.blast_utils import BlastRecords, retrieve_entrez_records, SequenceMatcher
+if TYPE_CHECKING:
+    from ruse.bio.igblast_parse import IgHit
+from ruse.bio.sequence_align import copy_features_to_gapped_sequence
 from ruse.util.frozen import Frozen
 
 Entrez.email = entrez_email()
@@ -45,7 +51,8 @@ class BlastResult(Frozen):
     ncbi_tags = 'bbm bbs dbj emb gb gim gnl gp lcl pat pdb pir prf ref sp tpd tpe tpg'.split(' ')
 
     def __init__(self, target_id: str, target_def: str, target_length: int, align_length: int, query: str, target: str,
-                 evalue: float, score: int, bits: float, accession: str, search_type: BlastSearchType):
+                 evalue: float, score: int, bits: float, accession: str, query_start: int, query_end: int,
+                 search_type: BlastSearchType):
         """
         Constructs the class from NCBI blast search output fields
 
@@ -71,8 +78,10 @@ class BlastResult(Frozen):
         self.score = score
         self.bits = bits
         self.accession = accession
+        self.query_start = query_start
+        self.query_end = query_end
         self.search_type = search_type
-        self.target_record = None  # type: SeqRecord
+        self.target_record = None  # type: Optional[SeqRecord]
 
     @classmethod
     def fasta_header_identifier(cls, header: str) -> Optional[str]:
@@ -362,6 +371,8 @@ class BlastResults(Frozen):
                     'target_length': alignment.length, 'align_length': hsp.align_length,
                     'query': hsp.query, 'target': hsp.sbjct, 'evalue': hsp.expect,
                     'score': int(round(hsp.score)), 'bits': hsp.bits, 'accession': alignment.accession,
+                    'query_start': hsp.query_start-1,
+                    'query_end': hsp.query_end-1,
                     'search_type': self.search_type}
             result = BlastResult(**attr)
             self.hits.append(result)
@@ -427,3 +438,88 @@ class BlastResults(Frozen):
         for hit in self.hits:
             if hit.target_record:
                 hit.complement_target_sequence()
+
+
+def build_common_alignments(query: SeqRecord, hits: List[Optional[Union[BlastResult, IgHit]]]) -> List[SeqRecord]:
+
+    # create alignment from hit
+    def build_hit_sequence(hit: Optional[Union[BlastResult, IgHit]]) -> Optional[SeqRecord]:
+        if not hit:
+            return None
+        buf = StringIO()
+        hit_pos = 0
+        q_seq = hit.query
+        q_len = len(q_seq)
+        t_seq = hit.target
+        for i, res in enumerate(str(query_seq)):
+            query_gaps = gaps[i] if i in gaps else 0
+            if i < hit.query_start or i > hit.query_end:
+                buf.write('-')
+                for _ in range(query_gaps):
+                    buf.write('-')
+            else:
+                query_gaps_processed = 0
+                assert res == q_seq[hit_pos]
+                buf.write(t_seq[hit_pos])
+                hit_pos += 1
+                while hit_pos < q_len and q_seq[hit_pos] == '-':
+                    query_gaps_processed += 1
+                    buf.write(t_seq[hit_pos])
+                    hit_pos += 1
+                assert query_gaps_processed <= query_gaps
+                for _ in range(query_gaps-query_gaps_processed):
+                    buf.write('-')
+        hit_align = buf.getvalue()
+        assert len(hit_align) == len(query_align)
+        id = hit.identifier()
+        if not id:
+            id = hit.target_id
+        hit_record = SeqRecord(Seq(hit_align), id, hit.target_id, hit.target_def)
+        return hit_record
+
+    # first find all gaps in query matches
+    query_seq = query.seq.ungap()
+    gaps = {}
+    for hit in hits:
+        if not hit:
+            continue
+        ungapped_pos = hit.query_start-1
+
+        in_gap = False
+        for i, base in enumerate(hit.query):
+            if base == '-':
+                if not in_gap:
+                    gap_length = 1
+                    in_gap = True
+                else:
+                    gap_length += 1
+            else:
+                if in_gap:
+                    if ungapped_pos in gaps:
+                        if gap_length > gaps[ungapped_pos]:
+                            gaps[ungapped_pos] = gap_length
+                    else:
+                        gaps[ungapped_pos] = gap_length
+                    in_gap = False
+                ungapped_pos += 1
+                assert query_seq[ungapped_pos] == base
+
+    buf = StringIO()
+    for i, res in enumerate(str(query_seq)):
+        buf.write(res)
+        query_gaps = gaps[i] if i in gaps else 0
+        for _ in range(query_gaps):
+            buf.write('-')
+
+    # now build alignments
+    query_align_seq = Seq(buf.getvalue())
+    query_align = SeqRecord(query_align_seq, query.id, query.name, query.description, query.dbxrefs)
+    copy_features_to_gapped_sequence(query, query_align)
+    aligned_hits = [build_hit_sequence(h) for h in hits]
+    aligned_hits.insert(0, query_align)
+
+    return aligned_hits
+
+
+
+

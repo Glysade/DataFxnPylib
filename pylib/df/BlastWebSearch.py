@@ -1,25 +1,19 @@
-import uuid
-
-from Bio.Seq import Seq
-from Bio.SeqRecord import SeqRecord
-
-from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResponse, string_input_field, ColumnData, \
-    DataType, integer_input_field, TableData
-from ruse.bio.bio_data_table_helper import sequence_to_genbank_base64_str
-from ruse.bio.blast_parse import BlastResults
 import ruse.bio.blast_search
+from df.bio_helper import sequences_to_column, query_from_request
+from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResponse, string_input_field, ColumnData, \
+    DataType, integer_input_field, TableData, boolean_input_field
+from ruse.bio.bio_data_table_helper import sequence_to_genbank_base64_str
+from ruse.bio.blast_parse import BlastResults, build_common_alignments
 
 
 class BlastWebSearch(DataFunction):
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         args = {}
-        query_input_field = string_input_field(request, 'query')
-        if not query_input_field:
-            raise ValueError()
-        query = SeqRecord(Seq(query_input_field), id=str(uuid.uuid4()), name='', description='')
+        query = query_from_request(request)
 
         database_name = string_input_field(request, 'databaseName')
         max_hits = integer_input_field(request, 'maxHits')
+        show_multiple_alignments = boolean_input_field(request, 'showMultipleAlignments', False)
 
         args['hitlist_size'] = max_hits
         args['database_name'] = database_name
@@ -42,6 +36,17 @@ class BlastWebSearch(DataFunction):
         query_sequences = []
         target_sequences = []
         uris = []
+        multiple_alignments = []
+        if show_multiple_alignments:
+            alignments.append(None)
+            target_ids.append(None)
+            target_definitions.append(None)
+            e_values.append(None)
+            scores.append(None)
+            bits.append(None)
+            query_sequences.append(None)
+            target_sequences.append(None)
+            uris.append(None)
 
         for hit in results.hits:
             align_str = '{}|{}'.format(hit.query, hit.target)
@@ -53,7 +58,6 @@ class BlastWebSearch(DataFunction):
             scores.append(hit.score)
             e_values.append(hit.evalue)
             bits.append(hit.bits)
-            # query_sequences.append(query_seq_str)
             query_sequences.append(hit.query)
             target_sequences.append(genbank_str)
             if include_pdb_uris:
@@ -66,7 +70,9 @@ class BlastWebSearch(DataFunction):
                     uri = None
                 uris.append(uri)
 
-        aligned_sequences_column = ColumnData(name='Aligned Sequence', dataType=DataType.STRING,
+        if show_multiple_alignments:
+            multiple_alignments = build_common_alignments(query, results.hits)
+        aligned_sequences_column = ColumnData(name='Sequence Pairs', dataType=DataType.STRING,
                                               contentType='chemical/x-sequence-pair', values=alignments)
         target_id_column = ColumnData(name='Target Id', dataType=DataType.STRING, values=target_ids)
         target_definition_column = ColumnData(name='Target Definition', dataType=DataType.STRING,
@@ -80,6 +86,9 @@ class BlastWebSearch(DataFunction):
                                             contentType='chemical/x-genbank', values=target_sequences)
         columns = [aligned_sequences_column, target_id_column, target_definition_column, e_value_column, score_column,
                    bit_column, query_sequence_column, target_sequence_column]
+        if show_multiple_alignments:
+            multiple_alignment_column = sequences_to_column(multiple_alignments, 'Aligned Sequence', True)
+            columns.insert(0, multiple_alignment_column)
         if include_pdb_uris:
             uri_column = ColumnData(name='URL', dataType=DataType.STRING, contentType='chemical/x-uri',
                                     properties={'Dimension': '3'}, values=uris)

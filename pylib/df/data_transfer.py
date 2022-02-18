@@ -51,11 +51,11 @@ class ColumnData(BaseModel):
         positions.reverse()
         self.missing_null_positions = positions
 
-    def insert_nulls(self, positions: Optional[List[int]] = None) -> None:
+    def insert_nulls(self, positions: Optional[List[int]] = None, offset: int = 0) -> None:
         if not positions:
             positions = self.missing_null_positions
         for p in positions:
-            self.values.insert(p, None)
+            self.values.insert(p + offset, None)
         self.missing_null_positions = []
 
 
@@ -96,7 +96,7 @@ def _check_data_type(request: DataFunctionRequest, field: str, expected_type: Da
         raise ValueError(f'Input field {field} has data type {data_type} expected {expected_type}')
 
 
-def string_input_field(request: DataFunctionRequest, field: str, default_value: str = None) -> Optional[str]:
+def string_input_field(request: DataFunctionRequest, field: str, default_value: Optional[str] = None) -> Optional[str]:
     data = _input_field_value(request, field)
     if not data:
         return default_value
@@ -104,7 +104,7 @@ def string_input_field(request: DataFunctionRequest, field: str, default_value: 
     return data
 
 
-def integer_input_field(request: DataFunctionRequest, field: str, default_value: int = None) -> Optional[int]:
+def integer_input_field(request: DataFunctionRequest, field: str, default_value: Optional[int] = None) -> Optional[int]:
     data = _input_field_value(request, field)
     if not data:
         return default_value
@@ -112,7 +112,17 @@ def integer_input_field(request: DataFunctionRequest, field: str, default_value:
     return data
 
 
-def float_input_field(request: DataFunctionRequest, field: str, default_value: float = None) -> Optional[float]:
+def boolean_input_field(request: DataFunctionRequest, field: str, default_value: Optional[bool] = None) -> Optional[
+    int]:
+    data = _input_field_value(request, field)
+    if not data:
+        return default_value
+    _check_data_type(request, field, DataType.BOOLEAN)
+    return data
+
+
+def float_input_field(request: DataFunctionRequest, field: str, default_value: Optional[float] = None) -> Optional[
+    float]:
     data = _input_field_value(request, field)
     if not data:
         return default_value
@@ -120,7 +130,7 @@ def float_input_field(request: DataFunctionRequest, field: str, default_value: f
     return data
 
 
-def binary_input_field(request: DataFunctionRequest, field: str, default_value: str = None) -> Optional[str]:
+def binary_input_field(request: DataFunctionRequest, field: str, default_value: Optional[str] = None) -> Optional[str]:
     data = _input_field_value(request, field)
     if not data:
         return default_value
@@ -128,7 +138,8 @@ def binary_input_field(request: DataFunctionRequest, field: str, default_value: 
     return data
 
 
-def string_list_input_field(request: DataFunctionRequest, field: str, default_value: List[str] = None) -> Optional[List[str]]:
+def string_list_input_field(request: DataFunctionRequest, field: str, default_value: Optional[List[str]] = None) -> \
+Optional[List[str]]:
     data = _input_field_value(request, field)
     if not data:
         return default_value

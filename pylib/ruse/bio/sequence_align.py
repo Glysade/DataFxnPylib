@@ -175,7 +175,7 @@ class MultipleSequenceAlignment(Frozen):
         id_to_input = {s.id: s for s in self.input_sequences}
         for output_sequence in self.aligned_sequences:
             input_sequence = id_to_input[output_sequence.id]
-            copy_features_to_aligned_sequence(input_sequence, output_sequence)
+            copy_features_to_gapped_sequence(input_sequence, output_sequence)
 
     def clean_files(self) -> None:
         """
@@ -188,9 +188,9 @@ class MultipleSequenceAlignment(Frozen):
                 os.remove(path)
 
 
-def copy_features_to_aligned_sequence(in_seq: SeqRecord, out_seq: SeqRecord, local: bool = False) -> None:
+def copy_features_to_gapped_sequence(in_seq: SeqRecord, out_seq: SeqRecord, local: bool = False) -> None:
     """
-    Copies sequence features from an input sequence to an aligned sequence, adjusting for inserted gaps
+    Copies sequence features from an input sequence to another sequence, adjusting for inserted or deleted gaps
 
     :param in_seq: The input sequence with no gaps as a :class:`Bio.SeqRecord.SeqRecord` object
     :param out_seq: The gapped aligned output sequence as a :class:`Bio.SeqRecord.SeqRecord` object
@@ -205,7 +205,7 @@ def copy_features_to_aligned_sequence(in_seq: SeqRecord, out_seq: SeqRecord, loc
     # when mapping from in_seq to out_seq account for gaps in both sequences
     in_position = 0
     new_positions = [None] * (len(in_seq) + 1)
-    for out_position, nt in enumerate(out_seq.seq):
+    for out_position, out_nt in enumerate(out_seq.seq):
         if in_position == len(in_seq):
             break
         in_nt = in_seq[in_position]
@@ -215,8 +215,8 @@ def copy_features_to_aligned_sequence(in_seq: SeqRecord, out_seq: SeqRecord, loc
             if in_position == len(in_seq):
                 break
             in_nt = in_seq[in_position]
-        if nt != '-':
-            if nt != in_nt:
+        if out_nt != '-':
+            if out_nt != in_nt:
                 raise ValueError('copy_features_to_aligned_sequence: sequence does not match')
             new_positions[in_position] = out_position
             in_position += 1
@@ -272,7 +272,7 @@ def _adjust_location(location: FeatureLocation, new_positions: List[int]) -> Opt
     """
 
     new_start = _adjust_position(location.start, new_positions)
-    if not new_start:
+    if new_start is None:
         return None
     # biopython end is exclusive, but I'm not sure what to do if the end position is not exact
     end = location.end

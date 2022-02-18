@@ -1,15 +1,18 @@
 import collections
+import json
 import os
 import re
 import uuid
-from typing import List, NamedTuple, Optional, Dict
+from typing import List, NamedTuple, Optional, Dict, Final
 
 from Bio.SeqFeature import FeatureLocation, SeqFeature
 from Bio.SeqRecord import SeqRecord
 
 from ruse.bio.applications import AnarciCommandLine
 from ruse.bio.bio_util import sequences_to_file
-from ruse.bio.sequence_align import copy_features_to_aligned_sequence
+from ruse.bio.sequence_align import copy_features_to_gapped_sequence
+
+ANTIBODY_NUMBERING_COLUMN_PROPERTY: Final[str] = "antibodyNumbering"
 
 
 class AntibodyNumber(NamedTuple):
@@ -99,6 +102,21 @@ class AntibodyAlignmentResult(NamedTuple):
     aligned_sequences: List[SeqRecord]
     numbering: List[AntibodyNumber]
     regions: List[ChainRegions]
+    numbering_scheme: str
+    cdr_definition: str
+
+    def to_column_json(self) -> str:
+        numbering_data = [{'domain': n.domain, 'position': n.query_position, 'label': n.label()} for n in
+                          self.numbering]
+        region_data = [r.to_data() for r in self.regions]
+        antibody_numbering = {
+            'scheme': self.cdr_definition,
+            'numbering_scheme': self.numbering_scheme,
+            'numbering': numbering_data,
+            'regions': region_data
+        }
+        numbering_json = json.dumps(antibody_numbering)
+        return numbering_json
 
 
 def label_antibody_sequences(sequences: List[SeqRecord], numbering_scheme: str = 'kabat',
@@ -110,7 +128,7 @@ def label_antibody_sequences(sequences: List[SeqRecord], numbering_scheme: str =
 
 
 def align_antibody_sequences(sequences: List[SeqRecord], numbering_scheme: str = 'kabat',
-                             cdr_definition: str = 'kabat'):
+                             cdr_definition: str = 'kabat') -> AntibodyAlignmentResult:
     mappings = label_antibody_sequences(sequences, numbering_scheme, cdr_definition)
     alignments = _do_align_antibody_sequences(sequences, mappings, numbering_scheme, cdr_definition)
     return alignments
@@ -185,13 +203,13 @@ def _do_align_antibody_sequences(sequences: List[SeqRecord],
     aligned_records = [SeqRecord(id=s.id, name=s.name, seq=seq, annotations={'molecule_type': 'protein'}) for s, seq in
                        zip(sequences, aligned_seqs)]
     for init, align in zip(sequences, aligned_records):
-        copy_features_to_aligned_sequence(init, align)
+        copy_features_to_gapped_sequence(init, align)
 
     numbering = [AntibodyNumber(n.domain, n.chain, n.position, n.insertion, p) for p, n in
                  zip(labelling_positions, labellings)]
     regions = _find_all_regions(numbering, numbering_scheme, cdr_definition)
 
-    return AntibodyAlignmentResult(aligned_records, numbering, regions)
+    return AntibodyAlignmentResult(aligned_records, numbering, regions, numbering_scheme, cdr_definition)
 
 
 def _find_in_mapping(mapping: List[AntibodyNumberMapping], position: AntibodyNumber, input_position: int) -> Optional[
@@ -385,6 +403,13 @@ def _find_regions(mapping: List[AntibodyNumber], numbering_scheme: str,
 
 def _annotate_sequence(record: SeqRecord, number_mapping: List[AntibodyNumberMapping], numbering_scheme: str,
                        cdr_definition: str = None):
+    def region_note(region_, name_):
+        return ['antibody_label: {}'.format(name_),
+                'antibody_domain: {}'.format(region_.domain),
+                'antibody_chain: {}'.format(region_.chain),
+                'cdr_definition: {}'.format(cdr_definition),
+                'antibody_scheme: {}'.format(numbering_scheme)]
+
     mapping = [n.to_antibody_number() for n in number_mapping]
     all_regions = _find_all_regions(mapping, numbering_scheme, cdr_definition)
     for region in all_regions:
@@ -405,66 +430,118 @@ def _annotate_sequence(record: SeqRecord, number_mapping: List[AntibodyNumberMap
         if start <= start1:
             name = '{}FR1'.format(chain)
             fr1_feature = SeqFeature(FeatureLocation(start, start1), type='region',
-                                     qualifiers={'note': ['antibody_label: {}'.format(name),
-                                                          'cdr_definition: {}'.format(cdr_definition),
-                                                          'antibody_scheme: {}'.format(numbering_scheme)]})
+                                     qualifiers={'note': region_note(region, name)})
             record.features.append(fr1_feature)
 
         if start1 <= end1 + 1:
             name = 'CDR-{}1'.format(chain)
             h1_feature = SeqFeature(FeatureLocation(start1, end1 + 1), type='region',
-                                    qualifiers={'note': ['antibody_label: {}'.format(name),
-                                                         'cdr_definition: {}'.format(cdr_definition),
-                                                         'antibody_scheme: {}'.format(numbering_scheme)]})
+                                    qualifiers={'note': region_note(region, name)})
             record.features.append(h1_feature)
 
         if end1 + 1 <= start2:
             name = '{}FR2'.format(chain)
             fr1_feature = SeqFeature(FeatureLocation(end1 + 1, start2), type='region',
-                                     qualifiers={'note': ['antibody_label: {}'.format(name),
-                                                          'cdr_definition: {}'.format(cdr_definition),
-                                                          'antibody_scheme: {}'.format(numbering_scheme)]})
+                                     qualifiers={'note': region_note(region, name)})
             record.features.append(fr1_feature)
 
         if start2 <= end2 + 1:
             name = 'CDR-{}2'.format(chain)
             h1_feature = SeqFeature(FeatureLocation(start2, end2 + 1), type='region',
-                                    qualifiers={'note': ['antibody_label: {}'.format(name),
-                                                         'cdr_definition: {}'.format(cdr_definition),
-                                                         'antibody_scheme: {}'.format(numbering_scheme)]})
+                                    qualifiers={'note': region_note(region, name)})
             record.features.append(h1_feature)
 
         if end2 + 1 <= start3:
             name = '{}FR3'.format(chain)
             fr1_feature = SeqFeature(FeatureLocation(end2 + 1, start3), type='region',
-                                     qualifiers={'note': ['antibody_label: {}'.format(name),
-                                                          'cdr_definition: {}'.format(cdr_definition),
-                                                          'antibody_scheme: {}'.format(numbering_scheme)]})
+                                     qualifiers={'note': region_note(region, name)})
             record.features.append(fr1_feature)
 
         if start3 <= end3 + 1:
             name = 'CDR-{}3'.format(chain)
             h1_feature = SeqFeature(FeatureLocation(start3, end3 + 1), type='region',
-                                    qualifiers={'note': ['antibody_label: {}'.format(name),
-                                                         'cdr_definition: {}'.format(cdr_definition),
-                                                         'antibody_scheme: {}'.format(numbering_scheme)]})
+                                    qualifiers={'note': region_note(region, name)})
             record.features.append(h1_feature)
 
         if end3 + 1 <= end + 1:
             name = '{}FR4'.format(chain)
             fr1_feature = SeqFeature(FeatureLocation(end3 + 1, end + 1), type='region',
-                                     qualifiers={'note': ['antibody_label: {}'.format(name),
-                                                          'cdr_definition: {}'.format(cdr_definition),
-                                                          'antibody_scheme: {}'.format(numbering_scheme)]})
+                                     qualifiers={'note': region_note(region, name)})
             record.features.append(fr1_feature)
 
     for num in mapping:
         if num.query_position is not None:
             num_feature = SeqFeature(FeatureLocation(num.query_position, num.query_position + 1), type='misc_feature',
                                      qualifiers={'note': ['antibody_number: {}'.format(num.label()),
+                                                          'antibody_domain: {}'.format(num.domain),
+                                                          'antibody_chain: {}'.format(num.chain),
                                                           'cdr_definition: {}'.format(cdr_definition),
                                                           'antibody_scheme: {}'.format(numbering_scheme)]})
             record.features.append(num_feature)
+
+
+def numbering_and_regions_from_sequence(seq: SeqRecord) -> Optional[AntibodyAlignmentResult]:
+    feature: SeqFeature
+    domain_pattern = re.compile(r'^antibody_domain: (\d+)$')
+    chain_pattern = re.compile(r'^antibody_chain: (\w+)$')
+    cdr_pattern = re.compile(r'^cdr_definition: (\w+)$')
+    scheme_pattern = re.compile(r'^antibody_scheme: (\w+)$')
+    number_pattern = re.compile(r'^antibody_number: (\w+)$')
+    label_pattern = re.compile(r'^([A-Z])(\d+)([A-Z]*)$')
+
+    cdr_definition: Optional[str] = None
+    numbering_scheme: Optional[str] = None
+    numbering: List[AntibodyNumber] = []
+    for feature in seq.features:
+        if feature.type != 'misc_feature':
+            continue
+        if 'note' in feature.qualifiers:
+            notes: List[str] = feature.qualifiers['note']
+            domain: Optional[int] = None
+            chain: Optional[str] = None
+            numbering_label: Optional[str] = None
+
+            if all((n.startswith('antibody_') or n.startswith('cdr_') for n in notes)):
+                for note in notes:
+                    if not cdr_definition:
+                        match = cdr_pattern.match(note)
+                        if match:
+                            cdr_definition = match.group(1)
+                            continue
+                    if not numbering_scheme:
+                        match = scheme_pattern.match(note)
+                        if match:
+                            numbering_scheme = match.group(1)
+                            continue
+
+                    match = domain_pattern.match(note)
+                    if match:
+                        domain = int(match.group(1))
+                        continue
+                    match = chain_pattern.match(note)
+                    if match:
+                        chain = match.group(1)
+                        continue
+                    match = number_pattern.match(note)
+                    if match:
+                        numbering_label = match.group(1)
+                        continue
+
+            if domain and chain and numbering_label and numbering_scheme:
+                match = label_pattern.match(numbering_label)
+                if match:
+                    assert chain == match.group(1)
+                    position = int(match.group(2))
+                    insertion = match.group(3)
+                    if not insertion:
+                        insertion = None
+                    number = AntibodyNumber(domain, chain, position, insertion, feature.location.start)
+                    numbering.append(number)
+    if not numbering:
+        return None
+
+    regions = _find_all_regions(numbering, numbering_scheme, cdr_definition)
+    return AntibodyAlignmentResult([seq], numbering, regions, numbering_scheme, cdr_definition)
 
 
 def _find_chain_regions(mapping: List[AntibodyNumber], chain: str, start1: str, end1: str,

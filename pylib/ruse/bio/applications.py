@@ -1,8 +1,49 @@
-from Bio.Application import _Option, _Switch, AbstractCommandline
-
 import numbers
+import os.path
 
-from Bio.Emboss.Applications import _EmbossCommandLine, _EmbossMinimalCommandLine, SeqretCommandline
+from Bio.Application import _Option, _Switch, AbstractCommandline
+from Bio.Emboss.Applications import _EmbossCommandLine, SeqretCommandline
+
+
+class IgblastnCommandLine(AbstractCommandline):
+    def __init__(self, cmd: str = os.path.join(os.environ.get('IGDATA'), 'bin', 'igblastn'), **kwargs: str) -> None:
+        self.parameters = [
+            _Option(['-germline_db_V', 'germline_db_V'], 'Germline database name', filename=True, equate=False,
+                    is_required=True),
+            _Option(['-germline_db_D', 'germline_db_D'], 'Germline database name', filename=True, equate=False,
+                    is_required=True),
+            _Option(['-germline_db_J', 'germline_db_J'], 'Germline database name', filename=True, equate=False,
+                    is_required=True),
+            _Option(['-organism', 'organism'], 'The organism for your query sequence', equate=False, is_required=True),
+            _Option(['-query', 'query'], 'Input file name', filename=True, equate=False, is_required=True),
+            _Option(['-outfmt', 'outfmt'], 'Formatting options', equate=False),
+            _Option(['-out', 'out'], 'Output file name', equate=False),
+            _Option(['-domain_system', 'domain_system'], 'Domain system to be used for segment annotation',
+                    equate=False, checker_function=lambda d: d in ['kabat', 'imgt']),
+            _Switch(['-show_translation', 'show_translation'], 'Show translated alignments'),
+            _Option(['-auxiliary_data', 'auxiliary_data'],
+                    'File containing the coding frame start positions for sequences in germline J database',
+                    filename=True, equate=False,
+                    is_required=False),
+        ]
+
+        super().__init__(cmd, **kwargs)
+
+
+class IgblastpCommandLine(AbstractCommandline):
+    def __init__(self, cmd: str = os.path.join(os.environ.get('IGDATA'), 'bin', 'igblastp'), **kwargs: str) -> None:
+        self.parameters = [
+            _Option(['-germline_db_V', 'germline_db_V'], 'Germline database name', filename=True, equate=False,
+                    is_required=True),
+            _Option(['-organism', 'organism'], 'The organism for your query sequence', equate=False, is_required=True),
+            _Option(['-query', 'query'], 'Input file name', filename=True, equate=False, is_required=True),
+            _Option(['-outfmt', 'outfmt'], 'Formatting options', equate=False),
+            _Option(['-out', 'out'], 'Output file name', equate=False),
+            _Option(['-domain_system', 'domain_system'], 'Domain system to be used for segment annotation',
+                    equate=False, checker_function=lambda d: d in ['kabat', 'imgt'])
+        ]
+
+        super().__init__(cmd, **kwargs)
 
 
 class AnarciCommandLine(AbstractCommandline):
@@ -91,7 +132,7 @@ class SeqretFeatureCommandline(SeqretCommandline):
 # Simple wrapper round showdb that only handles a few options
 class ShowDbCommandLine(_EmbossCommandLine):
 
-      def __init__(self, cmd='showdb', **kwargs: str) -> None:
+    def __init__(self, cmd='showdb', **kwargs: str) -> None:
         self.parameters = [
             _Switch(['-protein', 'protein'],
                     "Display protein databases"),
