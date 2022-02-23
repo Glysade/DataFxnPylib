@@ -139,7 +139,7 @@ def binary_input_field(request: DataFunctionRequest, field: str, default_value: 
 
 
 def string_list_input_field(request: DataFunctionRequest, field: str, default_value: Optional[List[str]] = None) -> \
-Optional[List[str]]:
+        Optional[List[str]]:
     data = _input_field_value(request, field)
     if not data:
         return default_value

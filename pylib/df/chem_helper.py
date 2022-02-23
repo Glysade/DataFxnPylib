@@ -4,7 +4,7 @@ from typing import Optional, List
 
 from rdkit.Chem.rdchem import Mol
 
-from df.data_transfer import ColumnData, DataType
+from df.data_transfer import ColumnData, DataType, DataFunctionRequest, string_input_field
 from ruse.rdkit.rdkit_utils import type_to_format, string_to_mol, mol_to_string
 
 
@@ -22,14 +22,17 @@ def _decode_binary(data: str) -> str:
             return value
         except UnicodeDecodeError:
             pass
-    raise UnicodeDecodeError('Unable to decode binary data')
+    raise ValueError('Unable to decode binary data')
 
 
 def _default_content_type(data_type: DataType) -> str:
+    content_type = None
     if data_type == DataType.STRING:
         content_type = 'chemical/x-smiles'
     elif data_type == DataType.BINARY:
         content_type = 'chemical/x-mdl-molfile'
+    if not content_type:
+        raise ValueError(f'Unable to determine contentType for dataType {data_type}')
     return content_type
 
 
@@ -44,9 +47,15 @@ def value_to_molecule(v: str, data_type: DataType, content_type: Optional[str] =
     return string_to_mol(fmt, data)
 
 
+def input_field_to_molecule(request: DataFunctionRequest, query_data_field: str = 'queryData') -> Optional[Mol]:
+    input_field = request.inputFields[query_data_field]
+    assert input_field.dataType == DataType.STRING
+    mol_string = str(input_field.data)
+    return value_to_molecule(mol_string, DataType.STRING, input_field.contentType)
+
+
 def _encode_binary(data: str) -> str:
-    data_bytes = bytes(data, 'utf-8')
-    zipped_data = gzip.compress(data_bytes)
+    zipped_data = gzip.compress(data.encode('utf-8'))
     encoded_data = base64.b64encode(zipped_data).decode('utf-8')
     return encoded_data
 
@@ -56,7 +65,7 @@ def molecules_to_column(mols: List[Optional[Mol]], column_name: str, data_type: 
     if content_type is None:
         content_type = _default_content_type(data_type)
     values = [None if m is None else molecule_to_value(m, data_type, content_type) for m in mols]
-    return ColumnData(name=column_name, dataType=data_type, content_type=content_type, values=values)
+    return ColumnData(name=column_name, dataType=data_type, contentType=content_type, values=values)
 
 
 def molecule_to_value(mol: Mol, data_type: DataType, content_type: Optional[str]) -> str:
@@ -66,5 +75,5 @@ def molecule_to_value(mol: Mol, data_type: DataType, content_type: Optional[str]
         content_type = _default_content_type(data_type)
     fmt = type_to_format(content_type)
     value = mol_to_string(fmt, mol)
-    data = data_type == _decode_binary(value) if data_type == DataType.BINARY else value
+    data = _encode_binary(value) if data_type == DataType.BINARY else value
     return data
