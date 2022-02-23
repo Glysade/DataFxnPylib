@@ -27,7 +27,7 @@ from rdkit.Chem import AllChem
 from rdkit.Chem.rdchem import Mol, RWMol, BondType, Atom, BondStereo, Bond, Conformer
 from rdkit.Geometry.rdGeometry import Point3D
 
-from ruse.rdkit import RDKitFormat
+from ruse.rdkit.rdkit_utils import RDKitFormat
 from ruse.rdkit.mcs import mcs_with_constant_smiles, mcs_match_fragments
 from ruse.rdkit.rdkit_utils import encode_mol, rescale_bond_lengths
 from ruse.util.data_table import DataTable
