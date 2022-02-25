@@ -1,12 +1,13 @@
 import numbers
 import os.path
+from typing import Optional
 
 from Bio.Application import _Option, _Switch, AbstractCommandline
 from Bio.Emboss.Applications import _EmbossCommandLine, SeqretCommandline
 
 
 class IgblastnCommandLine(AbstractCommandline):
-    def __init__(self, cmd: str = os.path.join(os.environ.get('IGDATA'), 'bin', 'igblastn'), **kwargs: str) -> None:
+    def __init__(self, cmd: Optional[str] = None, **kwargs: str) -> None:
         self.parameters = [
             _Option(['-germline_db_V', 'germline_db_V'], 'Germline database name', filename=True, equate=False,
                     is_required=True),
@@ -27,11 +28,13 @@ class IgblastnCommandLine(AbstractCommandline):
                     is_required=False),
         ]
 
+        if not cmd:
+            cmd = os.path.join(os.environ.get('IGDATA'), 'bin', 'igblastn')
         super().__init__(cmd, **kwargs)
 
 
 class IgblastpCommandLine(AbstractCommandline):
-    def __init__(self, cmd: str = os.path.join(os.environ.get('IGDATA'), 'bin', 'igblastp'), **kwargs: str) -> None:
+    def __init__(self, cmd: Optional[str] = None, **kwargs: str) -> None:
         self.parameters = [
             _Option(['-germline_db_V', 'germline_db_V'], 'Germline database name', filename=True, equate=False,
                     is_required=True),
@@ -43,6 +46,8 @@ class IgblastpCommandLine(AbstractCommandline):
                     equate=False, checker_function=lambda d: d in ['kabat', 'imgt'])
         ]
 
+        if not cmd:
+            cmd = os.path.join(os.environ.get('IGDATA'), 'bin', 'igblastp')
         super().__init__(cmd, **kwargs)
 
 

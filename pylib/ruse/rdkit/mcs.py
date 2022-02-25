@@ -2,11 +2,9 @@ import itertools
 from itertools import islice
 from typing import Tuple, List, NamedTuple, Dict, FrozenSet, Set
 
-# import networkx as nx
 from rdkit import Chem
 from rdkit.Chem.rdchem import Mol
 
-from ruse.rdkit.rdkit_utils import print_mol_information
 from ruse.util.frozen import Frozen
 
 
@@ -194,20 +192,6 @@ class MCS(Frozen):
     def find_mcs(self):
         correspondence_graph = self.build_correspondence_graph()
         cliques = correspondence_graph.find_cliques()
-
-        if False:
-            G = nx.Graph()
-            G.add_edges_from(correspondence_graph.edges)
-            cliques = [c for c in nx.find_cliques(G)]
-            max_size = max((len(c) for c in cliques))
-            query_atom_sets = set()
-            for clique in (c for c in cliques):
-                print("found clique {}".format(','.join([str(c) for c in clique])))
-                mapping = self.clique_to_mapping(correspondence_graph, clique)
-                self.print_mapping(mapping)
-                self.check_clique(correspondence_graph, clique)
-                query_atom_set = frozenset((m[0] for m in mapping))
-                query_atom_sets.add(query_atom_set)
 
         mappings = [self.clique_to_mapping(correspondence_graph, c) for c in cliques]
         return mappings
