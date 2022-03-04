@@ -42,7 +42,7 @@ def value_to_molecule(v: str, data_type: DataType, content_type: Optional[str] =
     if content_type is None:
         content_type = _default_content_type(data_type)
 
-    data = data_type == _decode_binary(v) if data_type == DataType.BINARY else v
+    data = _decode_binary(v) if data_type == DataType.BINARY else v
     fmt = type_to_format(content_type)
     return string_to_mol(fmt, data)
 
