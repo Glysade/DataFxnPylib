@@ -19,7 +19,11 @@ import sys
 from array import array
 from typing import List, NamedTuple, Union, Optional, Tuple
 
-from mmpdblib import commandline as mmp, command_support, dbutils, analysis_algorithms
+try:
+    from mmpdblib import commandline as mmp, command_support, dbutils, analysis_algorithms
+except ImportError:
+    from mmpdblib import cli as mmp, dbutils, analysis_algorithms
+    from mmpdblib.analysis_algorithms import get_transform_tool
 from mmpdblib.analysis_algorithms import TransformResult
 from mmpdblib.dbutils import open_database, DBFile
 from rdkit import Chem
@@ -374,72 +378,73 @@ def transform(smiles: str, properties: List[str], database_file: str) -> Transfo
     print them out.
 
     :param smiles: input structure
-    :param property: property to estimate effect on
+    :param properties: properties to estimate effect on
     :param database_file: MMP database
     :return: result of the transform
     """
 
-    args_in = ['transform', '--smiles', smiles, database_file]
-    for p in properties:
-        args_in.extend(['--property', p])
-    args, _ = mmp.parser.parse_known_args(args_in)
-    parser = args.subparser
-
-    # Python 2 raises an exception. Python 3 doesn't.
-    # This means I can provide a slightly better message.
-    command = getattr(args, "command", None)
-
-    min_radius = args.min_radius
-    assert min_radius in list("012345"), min_radius
-    min_radius = int(min_radius)
-    min_pairs = int(args.min_pairs)
-    min_variable_size = args.min_variable_size
-    min_constant_size = args.min_constant_size
-
-    explain = command_support.get_explain(args.explain)
-
-    dataset = dbutils.open_dataset_from_args_or_exit(args)
-
-    property_names = command_support.get_property_names_or_error(parser, args, dataset)
-
-    if args.substructure:
-        substructure_pat = Chem.MolFromSmarts(args.substructure)
-        if substructure_pat is None:
-            parser.error("Cannot parse --substructure %r" % (args.substructure,))
-    else:
-        substructure_pat = None
-
-    # evaluate --where, --score, and --rule-selection-cutoffs.
-    rule_selection_function = analysis_algorithms.get_rule_selection_function_from_args(
-        parser, args)
-
-    transform_tool = analysis_algorithms.get_transform_tool(dataset, rule_selection_function)
-    transform_record = transform_tool.fragment_transform_smiles(args.smiles)
-    if transform_record.errmsg:
-        parser.error("Unable to fragment --smiles %r: %s"
-                     % (args.smiles, transform_record.errmsg))
-
-    if args.jobs > 1:
-        pool = multiprocessing.Pool(processes=args.jobs)
-    else:
-        pool = None
+    # MMPDB 2 stuff:
     try:
-        result = transform_tool.transform(
-            transform_record.fragments, property_names,
-            min_radius=min_radius,
-            min_pairs=min_pairs,
-            min_variable_size=min_variable_size,
-            min_constant_size=min_constant_size,
-            substructure_pat=substructure_pat,
-            pool=pool,
-            explain=explain,
-        )
-    except analysis_algorithms.EvalError as err:
-        sys.stderr.write("ERROR: %s\nExiting.\n" % (err,))
-        raise SystemExit(1)
+        args_in = ['transform', '--smiles', smiles, database_file]
+        for p in properties:
+            args_in.extend(['--property', p])
+        args, _ = mmp.parser.parse_known_args(args_in)
+        parser = args.subparser
+        min_radius = args.min_radius
+        assert min_radius in list("012345"), min_radius
+        min_radius = int(min_radius)
+        min_pairs = int(args.min_pairs)
+        min_variable_size = args.min_variable_size
+        min_constant_size = args.min_constant_size
+        explain = command_support.get_explain(args.explain)
+        dataset = dbutils.open_dataset_from_args_or_exit(args)
+        property_names = command_support.get_property_names_or_error(parser, args, dataset)
 
-    return result
+        if args.substructure:
+            substructure_pat = Chem.MolFromSmarts(args.substructure)
+            if substructure_pat is None:
+                parser.error("Cannot parse --substructure %r" % (args.substructure,))
+        else:
+            substructure_pat = None
 
+        # evaluate --where, --score, and --rule-selection-cutoffs.
+        rule_selection_function = analysis_algorithms.get_rule_selection_function_from_args(
+            parser, args)
+
+        transform_tool = analysis_algorithms.get_transform_tool(dataset, rule_selection_function)
+        transform_record = transform_tool.fragment_transform_smiles(args.smiles)
+        if transform_record.errmsg:
+            parser.error("Unable to fragment --smiles %r: %s"
+                         % (args.smiles, transform_record.errmsg))
+
+        if args.jobs > 1:
+            pool = multiprocessing.Pool(processes=args.jobs)
+        else:
+            pool = None
+        try:
+            result = transform_tool.transform(
+                transform_record.fragments, property_names,
+                min_radius=min_radius,
+                min_pairs=min_pairs,
+                min_variable_size=min_variable_size,
+                min_constant_size=min_constant_size,
+                substructure_pat=substructure_pat,
+                pool=pool,
+                explain=explain,
+            )
+        except analysis_algorithms.EvalError as err:
+            sys.stderr.write("ERROR: %s\nExiting.\n" % (err,))
+            raise SystemExit(1)
+
+        return result
+    except AttributeError:
+        # MMPDB3
+        db = dbutils.open_database(database_file)
+        dataset = db.get_dataset()
+        transform_tool = get_transform_tool(dataset)
+        transform_record = transform_tool.fragment_transform_smiles(smiles)
+        result = transform_tool.transform(transform_record.fragmentations, properties)
+        return result
 
 def create_combined_structure(constant_smiles: str, variable_smiles: str,
                               attachment_order: Optional[List[int]] = None) -> Mol:

@@ -7,7 +7,10 @@ import tempfile
 from datetime import datetime
 from typing import List, Final
 
-from mmpdblib import commandline as mmp
+try:
+    from mmpdblib import commandline as mmp
+except ImportError:
+    from mmpdblib import cli as mmp
 from mmpdblib.analysis_algorithms import TransformResult
 from pydantic import BaseModel
 from rdkit import Chem
@@ -21,7 +24,7 @@ from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResp
 from ruse.rdkit.mmp import result_to_mmp_transform, transform, RadiusAndRuleGroup, build_fingerprint, MmpTransform
 from ruse.rdkit.rdkit_utils import sanitize_mol, smiles_to_mol
 
-VERSION: Final[str] = '0.0.1'
+VERSION: Final[str] = '0.0.2'
 
 
 class MmpdbProperties(BaseModel):
@@ -82,18 +85,28 @@ def build_mmp_database(mmpdb_dir: str, request: DataFunctionRequest) -> MmpdbPro
 
     # build fragments file
     n_proc = multiprocessing.cpu_count()
-    args = ['fragment', '--in', 'smi', '--out', 'fragments.gz', '--num-jobs', str(n_proc), '--output',
+    # args = ['fragment', '--in', 'smi', '--out', 'fragments.gz', '--num-jobs', str(n_proc), '--output',
+    args = ['fragment', '--in', 'smi', '--num-jobs', str(n_proc), '--output',
             fragments_file, '--delimiter',
             'space', smiles_file]
-    mmp.main(args)
+    try:
+        mmp.main(args=args, standalone_mode=False)
+    except TypeError:
+        mmp.main(args)
 
     # index fragments
     args = ['index', fragments_file, '-o', database_file]
-    mmp.main(args)
+    try:
+        mmp.main(args=args, standalone_mode=False)
+    except TypeError:
+        mmp.main(args)
 
     # add properties to database
     args = ['loadprops', '-p', property_file, database_file]
-    mmp.main(args)
+    try:
+        mmp.main(args=args, standalone_mode=False)
+    except TypeError:
+        mmp.main(args)
 
     os.remove(smiles_file)
     os.remove(property_file)
