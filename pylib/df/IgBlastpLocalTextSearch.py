@@ -54,6 +54,8 @@ class IgBlastpLocalTextSearch(DataFunction):
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         query_sequence = query_from_request(request)
+        ig_data = string_input_field(request, 'igBlastDataDirectory')
+        os.environ['IGDATA'] = ig_data
 
         id = str(uuid.uuid4())
         v_database = string_input_field(request, 'germlineDbV')

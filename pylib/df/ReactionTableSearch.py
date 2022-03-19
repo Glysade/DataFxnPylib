@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 
 from rdkit import Chem
 from rdkit.Chem import AllChem
@@ -32,7 +32,7 @@ class ReactionTableSearch(DataFunction):
             if '>>' not in rxn_text:
                 raise ValueError(f'Input {rxn_text} is not a reaction smarts')
             rxn = AllChem.ReactionFromSmarts(rxn_text)
-        elif rxn_content_type in ['chemical/x-mdl-molfile', 'chemical/x-mdl-molfile-v3000']:
+        elif rxn_content_type in ['chemical/x-mdl-molfile', 'chemical/x-mdl-molfile-v3000', 'chemical/x-mdl-rxnfile']:
             if '$RXN' not in rxn_text:
                 raise ValueError(f'Input is not a RXN block: {rxn_text}')
             rxn = AllChem.ReactionFromRxnBlock(rxn_text)
@@ -45,21 +45,27 @@ class ReactionTableSearch(DataFunction):
 
         structure_column_id = string_input_field(request, 'structureColumn')
         structures = column_to_molecules(request.inputColumns[structure_column_id])
-        property_column_ids = string_list_input_field(request, 'propertyFields')
+        id_column_id = string_input_field(request, 'idColumn')
+        id_column = request.inputColumns[id_column_id]
+        ids: List[Union[str, int]] = id_column.values
+        property_column_ids = string_list_input_field(request, 'propertyColumns')
         structure_to_row: Dict[str, int] = {Chem.MolToSmiles(mol): r for r, mol in enumerate(structures) if mol}
         properties = [request.inputColumns[column_id].values for column_id in property_column_ids]
         property_names = ['_'.join(request.inputColumns[column_id].name.split()) for column_id in property_column_ids]
 
         lhs: List[Mol] = []
         rhs: List[Mol] = []
-        from_rows: List[int] = []
-        to_rows: List[int] = []
+        from_ids: List[Union[str, int]] = []
+        to_ids: List[Union[str, int]] = []
         deltas: List[List[Optional[float]]] = []
         for _ in range(len(property_names)):
             deltas.append([])
 
         for row, structure in enumerate(structures):
             if not structure:
+                continue
+            from_id = ids[row]
+            if from_id is None:
                 continue
             product_list = rxn.RunReactants([structure])
             for products in product_list:
@@ -69,19 +75,22 @@ class ReactionTableSearch(DataFunction):
                 product_smiles = Chem.MolToSmiles(product)
                 if product_smiles in structure_to_row:
                     other_row = structure_to_row[product_smiles]
+                    to_id = ids[other_row]
+                    if to_id is None:
+                        continue
                     lhs.append(structure)
                     rhs.append(structures[other_row])
-                    from_rows.append(row)
-                    to_rows.append(other_row)
+                    from_ids.append(from_id)
+                    to_ids.append(to_id)
                     d = delta(row, other_row, properties)
                     for i, v in enumerate(d):
                         deltas[i].append(v)
 
         lhs_column = molecules_to_column(lhs, 'LHS', DataType.BINARY)
         rhs_column = molecules_to_column(rhs, 'RHS', DataType.BINARY)
-        lhs_row_column = ColumnData(name='LHS row', dataType=DataType.INTEGER, values=from_rows)
-        rhs_row_column = ColumnData(name='RHS row', dataType=DataType.INTEGER, values=to_rows)
-        columns = [lhs_column, rhs_column, lhs_row_column, rhs_row_column]
+        lhs_id_column = ColumnData(name=f'LHS {id_column.name}', dataType=id_column.dataType, values=from_ids)
+        rhs_id_column = ColumnData(name=f'RHS {id_column.name}', dataType=id_column.dataType, values=to_ids)
+        columns = [lhs_column, rhs_column, lhs_id_column, rhs_id_column]
         for name, d in zip(property_names, deltas):
             column = ColumnData(name=f'Delta {name}', dataType=DataType.FLOAT, values=d)
             columns.append(column)

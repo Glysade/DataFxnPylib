@@ -1,3 +1,4 @@
+import os
 from typing import List, Optional
 
 from Bio.SeqRecord import SeqRecord
@@ -14,7 +15,7 @@ from ruse.bio.blast_utils import blast_databases_list
 from ruse.util.log import error
 
 
-def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest,
+def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest, output_table_name: str,
                      sequence_column_type: Optional[str] = None):
     database_name = string_input_field(request, 'databaseName')
     method = string_input_field(request, 'method')
@@ -55,6 +56,8 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest,
     alignments = []
     target_ids = []
     target_definitions = []
+    query_ids = []
+    query_definitions = []
     e_values = []
     scores = []
     bits = []
@@ -65,7 +68,8 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest,
         alignments.append(None)
         target_ids.append(None)
         target_definitions.append(None)
-        target_definitions.append(None)
+        query_ids.append(None)
+        query_definitions.append(None)
         e_values.append(None)
         scores.append(None)
         bits.append(None)
@@ -86,6 +90,8 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest,
             alignments.append(align_str)
             target_ids.append(hit.target_id)
             target_definitions.append(hit.target_def)
+            query_ids.append(query_sequence.id)
+            query_definitions.append(query_sequence.description)
             e_values.append(hit.evalue)
             scores.append(hit.score)
             bits.append(hit.bits)
@@ -101,6 +107,9 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest,
     target_id_column = ColumnData(name='Target Id', dataType=DataType.STRING, values=target_ids)
     target_definition_column = ColumnData(name='Target Definition', dataType=DataType.STRING,
                                           values=target_definitions)
+    query_id_column = ColumnData(name='Query Id', dataType=DataType.STRING, values=query_ids)
+    query_definition_column = ColumnData(name='Query Definition', dataType=DataType.STRING,
+                                          values=query_definitions)
     e_value_column = ColumnData(name='EValue', dataType=DataType.FLOAT, values=e_values)
     score_column = ColumnData(name='Score', dataType=DataType.INTEGER, values=scores)
     bit_column = ColumnData(name='Bits', dataType=DataType.FLOAT, values=bits)
@@ -110,16 +119,20 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest,
                                         contentType=sequence_column_type, values=target_sequences)
     columns = [aligned_sequences_column,
                target_id_column,
-               target_definition_column, e_value_column, score_column, bit_column,
+               target_definition_column,
+               e_value_column, score_column, bit_column,
                query_sequence_column,
                target_sequence_column]
+    if len(sequences) > 1:
+        columns.insert(3, query_definition_column)
+        columns.insert(3, query_id_column)
     if show_multiple_alignments:
         multiple_alignment_column = sequences_to_column(multiple_alignments, 'Aligned Sequence', True)
         antibody_numbering = numbering_and_regions_from_sequence(multiple_alignments[0])
         if antibody_numbering:
             multiple_alignment_column.properties[ANTIBODY_NUMBERING_COLUMN_PROPERTY] = antibody_numbering.to_column_json()
         columns.insert(0, multiple_alignment_column)
-    output_table = TableData(tableName='Blast search results',
+    output_table = TableData(tableName=output_table_name,
                              columns=columns)
     response = DataFunctionResponse(outputTables=[output_table])
     return response
@@ -129,4 +142,6 @@ class BlastLocalTextSearch(DataFunction):
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         query_sequence = query_from_request(request)
-        return run_blast_search([query_sequence], request)
+        blastdb = string_input_field(request, 'blastDbPath')
+        os.environ['BLASTDB'] = blastdb
+        return run_blast_search([query_sequence], request, 'Blast text search results')
