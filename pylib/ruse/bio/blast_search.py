@@ -302,7 +302,7 @@ class BlastSearch(Frozen):
         # local import to prevent circular errors
         from ruse.util.util import num_processors
         args = {'cmd': search_type.exe(), 'outfmt': 5, 'db': database_name, 'query': fasta_file, 'out': output_file,
-                'num_threads': num_processors() + 1}
+                'num_threads': num_processors()}
         # in options max_target_seqs cannot be used with num_alignments or num_descriptions
         if 'max_target_seqs' in options:
             if 'num_alignments' in options or 'num_descriptions' in options:
