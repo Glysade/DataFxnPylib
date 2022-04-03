@@ -10,7 +10,7 @@ from ruse.bio.bio_data_table_helper import genbank_base64_str_to_sequence, seque
     string_to_sequence
 
 
-def values_to_sequences(column: ColumnData) -> List[Optional[SeqRecord]]:
+def values_to_sequences(column: ColumnData, id_column: Optional[ColumnData] = None) -> List[Optional[SeqRecord]]:
     content_type = column.contentType
     if content_type == 'chemical/x-sequence':
         sequences = [string_to_sequence(s, index) if s else None for (index, s) in
@@ -20,6 +20,10 @@ def values_to_sequences(column: ColumnData) -> List[Optional[SeqRecord]]:
                      enumerate(column.values)]
     else:
         raise ValueError(f'Unable to process content type {content_type}')
+    if id_column:
+        for seq, seq_id in zip(sequences, id_column.values):
+            if seq and id:
+                seq.id = seq_id
     return sequences
 
 

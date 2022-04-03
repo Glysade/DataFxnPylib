@@ -15,10 +15,12 @@ class DataType(Enum):
     STRING = 'string'
     BINARY = 'binary'
     INTEGER = 'integer'
+    LONG = 'long'
     FLOAT = 'float'
+    DOUBLE = 'double'
     STRING_LIST = 'list(string)'
     INTEGER_LIST = 'list(integer)'
-    FLOAT_LIST = 'list(float)'
+    DOUBLE_LIST = 'list(double)'
 
 
 class InputFieldSelectorType(Enum):
@@ -96,6 +98,13 @@ def _check_data_type(request: DataFunctionRequest, field: str, expected_type: Da
         raise ValueError(f'Input field {field} has data type {data_type} expected {expected_type}')
 
 
+def _check_data_types(request: DataFunctionRequest, field: str, expected_types: List[DataType]) -> None:
+    data_type = request.inputFields[field].dataType
+    if data_type not in expected_types:
+        msg = ','.join(str(e) for e in expected_types)
+        raise ValueError(f'Input field {field} has data type {data_type} expected one of {msg}')
+
+
 def string_input_field(request: DataFunctionRequest, field: str, default_value: Optional[str] = None) -> Optional[str]:
     data = _input_field_value(request, field)
     if not data:
@@ -108,7 +117,7 @@ def integer_input_field(request: DataFunctionRequest, field: str, default_value:
     data = _input_field_value(request, field)
     if not data:
         return default_value
-    _check_data_type(request, field, DataType.INTEGER)
+    _check_data_types(request, field, [DataType.LONG, DataType.INTEGER])
     return data
 
 
@@ -121,12 +130,12 @@ def boolean_input_field(request: DataFunctionRequest, field: str, default_value:
     return data
 
 
-def float_input_field(request: DataFunctionRequest, field: str, default_value: Optional[float] = None) -> Optional[
+def double_input_field(request: DataFunctionRequest, field: str, default_value: Optional[float] = None) -> Optional[
     float]:
     data = _input_field_value(request, field)
     if not data:
         return default_value
-    _check_data_type(request, field, DataType.FLOAT)
+    _check_data_types(request, field, [DataType.DOUBLE, DataType.FLOAT])
     return data
 
 

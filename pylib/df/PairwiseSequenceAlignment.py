@@ -43,7 +43,7 @@ class PairwiseSequenceAlignment(DataFunction):
 
         aligned_sequences_column = ColumnData(name='Pairwise Alignment', dataType=DataType.STRING,
                                               contentType='chemical/x-sequence-pair', values=aligned_sequences)
-        scores_column = ColumnData(name='Pairwise Alignment Score', dataType=DataType.FLOAT, values=scores)
+        scores_column = ColumnData(name='Pairwise Alignment Score', dataType=DataType.DOUBLE, values=scores)
 
         target_column = sequences_to_column(targets, 'Pairwise Alignment Target', genbank_output=genbank)
         query_column = sequences_to_column(queries, 'Pairwise Alignment Query', genbank_output=False)

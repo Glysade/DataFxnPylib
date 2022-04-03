@@ -36,7 +36,7 @@ class MultipleSequenceAlignment(DataFunction):
         msa.add_distances()
         for index, id in zip(range(size), id_values):
             distances[index] = msa.distance_lookup.get(id)
-        distance_column = ColumnData(name='Distance', dataType=DataType.FLOAT, values=distances)
+        distance_column = ColumnData(name='Distance', dataType=DataType.DOUBLE, values=distances)
         missing = input_column.missing_null_positions
         output_column.insert_nulls(missing)
         id_column.insert_nulls(missing)

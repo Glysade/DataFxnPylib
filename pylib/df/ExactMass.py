@@ -11,6 +11,6 @@ class ExactMass(DataFunction):
         input_column = request.inputColumns[column_id]
         mols = column_to_molecules(input_column)
         weights = [None if m is None else ExactMolWt(m) for m in mols]
-        output_column = ColumnData(name=f'{input_column.name} Exact Mass', dataType=DataType.FLOAT, values=weights)
+        output_column = ColumnData(name=f'{input_column.name} Exact Mass', dataType=DataType.DOUBLE, values=weights)
         response = DataFunctionResponse(outputColumns=[output_column])
         return response

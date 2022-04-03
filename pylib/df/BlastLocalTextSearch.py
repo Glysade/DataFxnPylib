@@ -16,7 +16,7 @@ from ruse.util.log import error
 
 
 def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest, output_table_name: str,
-                     sequence_column_type: Optional[str] = None):
+                     sequence_column_type: Optional[str] = None, show_query_id: bool = False):
     database_name = string_input_field(request, 'databaseName')
     method = string_input_field(request, 'method')
     max_hits = integer_input_field(request, 'maxHits')
@@ -110,9 +110,9 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest, o
     query_id_column = ColumnData(name='Query Id', dataType=DataType.STRING, values=query_ids)
     query_definition_column = ColumnData(name='Query Definition', dataType=DataType.STRING,
                                           values=query_definitions)
-    e_value_column = ColumnData(name='EValue', dataType=DataType.FLOAT, values=e_values)
-    score_column = ColumnData(name='Score', dataType=DataType.INTEGER, values=scores)
-    bit_column = ColumnData(name='Bits', dataType=DataType.FLOAT, values=bits)
+    e_value_column = ColumnData(name='EValue', dataType=DataType.DOUBLE, values=e_values)
+    score_column = ColumnData(name='Score', dataType=DataType.LONG, values=scores)
+    bit_column = ColumnData(name='Bits', dataType=DataType.DOUBLE, values=bits)
     query_sequence_column = ColumnData(name='Query Sequence', dataType=sequence_data_type,
                                        contentType=sequence_column_type, values=query_sequences)
     target_sequence_column = ColumnData(name='Target Sequence', dataType=sequence_data_type,
@@ -123,7 +123,7 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest, o
                e_value_column, score_column, bit_column,
                query_sequence_column,
                target_sequence_column]
-    if len(sequences) > 1:
+    if show_query_id:
         columns.insert(3, query_definition_column)
         columns.insert(3, query_id_column)
     if show_multiple_alignments:

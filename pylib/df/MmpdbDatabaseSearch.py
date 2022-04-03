@@ -20,6 +20,8 @@ def database_properties(database_path: str) -> List[str]:
     properties = []
     for row in cursor.execute('select name from property_name'):
         properties.append(row[0])
+    cursor.close()
+    connection.close()
     return properties
 
 
@@ -72,8 +74,8 @@ def search_mmpdb(query_smiles: str, query_mol: Mol, property_names: list[str],
     product_column = molecules_to_column(products, 'Product', DataType.BINARY)
     from_column = molecules_to_column(froms, 'From', DataType.BINARY)
     to_column = molecules_to_column(tos, 'To', DataType.BINARY)
-    radius_column = ColumnData(name='RADIUS', dataType=DataType.INTEGER, values=radii)
-    rule_column = ColumnData(name='Env_rule', dataType=DataType.INTEGER, values=rules,
+    radius_column = ColumnData(name='RADIUS', dataType=DataType.LONG, values=radii)
+    rule_column = ColumnData(name='Env_rule', dataType=DataType.LONG, values=rules,
                              properties={'mmpdbPath': mmpdb_database_file})
     transform_fingerprint_column = ColumnData(name='TransformFingerprint', dataType=DataType.BINARY,
                                               values=transform_fingerprints, contentType='application/octet-stream')
@@ -81,7 +83,7 @@ def search_mmpdb(query_smiles: str, query_mol: Mol, property_names: list[str],
                                     values=fingerprints, contentType='application/octet-stream')
     property_columns: List[ColumnData] = []
     for name, values in zip(property_names, properties):
-        column = ColumnData(name=f'Delta {name}', dataType=DataType.FLOAT, values=values)
+        column = ColumnData(name=f'Delta {name}', dataType=DataType.DOUBLE, values=values)
         property_columns.append(column)
 
     columns = [query_column, product_column, from_column, to_column, radius_column, rule_column, fingerprint_column,

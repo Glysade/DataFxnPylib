@@ -88,64 +88,70 @@ class MultipleSequenceAlignment(Frozen):
         # purge gap only or empty sequences:
         in_sequences = [s for s in in_sequences if ok_sequence(s)]
 
-        with open(in_file, 'w') as f:
-            SeqIO.write(in_sequences, f, "fasta")
-
-        if alignment_method == SequenceAlignmentMethod.CLUSTALO:
-            # create and execute clustalo command line
-            # TODO - need to pass options
-            if os.name == 'nt':
-                clustalo_exe = 'clustalo.exe'
-            elif os.name == 'posix':
-                clustalo_exe = 'clustalo'
-            else:
-                raise RuntimeError("Unable to determine clustal exe for os {}".format(os.name))
-            clustalo_cline = ClustalOmegaCommandline(clustalo_exe, infile=in_file, outfile=out_file, distmat_full=False,
-                                                     # outputorder='tree-order',
-                                                     outfmt="clustal", verbose=True, auto=True,
-                                                     guidetree_out=guide_file)
-            # print("Clustalo command line {}".format(clustalo_cline))
-            stdout, stderr = clustalo_cline()
-
-        elif alignment_method == SequenceAlignmentMethod.CLUSTALW:
-            # clustalw.  Note that aligned sequence names may be truncated in clustalw output
-            # clustalw is currently not supported and not working!
-            # clustalw_cline = ClustalwCommandline('clustalw', infile=in_file, outfile=out_file, outorder='INPUT')
-            clustalw_cline = ClustalwCommandline('clustalw', infile=in_file, outfile=out_file)
-            stdout, stderr = clustalw_cline()
-
-        elif alignment_method == SequenceAlignmentMethod.MUSCLE:
-            if os.name == 'nt':
-                muscle_exe = 'muscle3.8.31_i86win32.exe'
-            elif os.name == 'posix':
-                muscle_exe = os.path.abspath(
-                    os.path.join(os.path.dirname(__file__), "../../bin/linux_bin/muscle"))
-            else:
-                raise RuntimeError("Unable to determine muscle exe for os {}".format(os.name))
-            # tree2 to save newick guide tree after 2nd iteration, stable to have output order match input order
-            # clw is clustal flag, stable is no longer supported, so rearrange sequences after alignment
-            muscle_cline = MuscleCommandline(muscle_exe, input=in_file, out=out_file, clw=True,
-                                             tree2=guide_file)
-            stdout, stderr = muscle_cline()
-
+        if not in_sequences:
+            aligned_sequences = []
+            self.alignment = None
+        elif len(in_sequences) == 1:
+            aligned_sequences = in_sequences
         else:
-            raise AttributeError('Unknown alignment method {}'.format(str(alignment_method)))
+            with open(in_file, 'w') as f:
+                SeqIO.write(in_sequences, f, "fasta")
 
-        align = AlignIO.read(out_file, "clustal")
-        aligned_sequences = [s for s in align]
+            if alignment_method == SequenceAlignmentMethod.CLUSTALO:
+                # create and execute clustalo command line
+                # TODO - need to pass options
+                if os.name == 'nt':
+                    clustalo_exe = 'clustalo.exe'
+                elif os.name == 'posix':
+                    clustalo_exe = 'clustalo'
+                else:
+                    raise RuntimeError("Unable to determine clustal exe for os {}".format(os.name))
+                clustalo_cline = ClustalOmegaCommandline(clustalo_exe, infile=in_file, outfile=out_file, distmat_full=False,
+                                                         # outputorder='tree-order',
+                                                         outfmt="clustal", verbose=True, auto=True,
+                                                         guidetree_out=guide_file)
+                # print("Clustalo command line {}".format(clustalo_cline))
+                stdout, stderr = clustalo_cline()
 
-        # muscle sequence output order is not the same as input order- reorder here assuming that ids are unique
-        # if alignment_method == SequenceAlignmentMethod.MUSCLE:
-        # Do this anyway as
-        # not all input sequences are present in the output- the output is ordered
-        # as the same as the input, but some sequences may not be included in the alignment
-        # (for example if they are gap only)
-        aligned_sequences_lookup = {s.id: s for s in aligned_sequences}
-        aligned_sequences = [aligned_sequences_lookup.get(s.id) for s in sequences]
+            elif alignment_method == SequenceAlignmentMethod.CLUSTALW:
+                # clustalw.  Note that aligned sequence names may be truncated in clustalw output
+                # clustalw is currently not supported and not working!
+                # clustalw_cline = ClustalwCommandline('clustalw', infile=in_file, outfile=out_file, outorder='INPUT')
+                clustalw_cline = ClustalwCommandline('clustalw', infile=in_file, outfile=out_file)
+                stdout, stderr = clustalw_cline()
+
+            elif alignment_method == SequenceAlignmentMethod.MUSCLE:
+                if os.name == 'nt':
+                    muscle_exe = 'muscle3.8.31_i86win32.exe'
+                elif os.name == 'posix':
+                    muscle_exe = os.path.abspath(
+                        os.path.join(os.path.dirname(__file__), "../../bin/linux_bin/muscle"))
+                else:
+                    raise RuntimeError("Unable to determine muscle exe for os {}".format(os.name))
+                # tree2 to save newick guide tree after 2nd iteration, stable to have output order match input order
+                # clw is clustal flag, stable is no longer supported, so rearrange sequences after alignment
+                muscle_cline = MuscleCommandline(muscle_exe, input=in_file, out=out_file, clw=True,
+                                                 tree2=guide_file)
+                stdout, stderr = muscle_cline()
+
+            else:
+                raise AttributeError('Unknown alignment method {}'.format(str(alignment_method)))
+
+            align = AlignIO.read(out_file, "clustal")
+            aligned_sequences = [s for s in align]
+
+            # muscle sequence output order is not the same as input order- reorder here assuming that ids are unique
+            # if alignment_method == SequenceAlignmentMethod.MUSCLE:
+            # Do this anyway as
+            # not all input sequences are present in the output- the output is ordered
+            # as the same as the input, but some sequences may not be included in the alignment
+            # (for example if they are gap only)
+            aligned_sequences_lookup = {s.id: s for s in aligned_sequences}
+            aligned_sequences = [aligned_sequences_lookup.get(s.id) for s in sequences]
+            self.alignment = align
 
         self.aligned_sequences = aligned_sequences
-        self.alignment = align
-        if len(sequences) > 2:
+        if len(sequences) > 1:
             if PhyloTreeBuilder.find_fasttree_exe():
                 phylo_tree_builder = PhyloTreeBuilder()
                 self.tree = phylo_tree_builder.build_fasttree_tree(out_file)
@@ -158,7 +164,9 @@ class MultipleSequenceAlignment(Frozen):
         """
         Add an evolutionary distance for each sequence using the guide tree or fasttree
         """
-        if len(self.input_sequences) == 1:
+        if not self.input_sequences:
+            distance_lookup = {}
+        elif len(self.input_sequences) == 1:
             distance_lookup = {self.input_sequences[0].id: 1.0}
         else:
             tree = PhyloTree(self.tree)

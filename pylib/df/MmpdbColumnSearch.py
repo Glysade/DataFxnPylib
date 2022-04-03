@@ -1,11 +1,13 @@
+import glob
 import hashlib
 import json
 import multiprocessing
 import os.path
 import re
 import tempfile
+import uuid
 from datetime import datetime
-from typing import List, Final
+from typing import List, Final, Optional
 
 from df.MmpdbDatabaseSearch import mmpdb_query, search_mmpdb
 
@@ -31,9 +33,21 @@ class MmpdbProperties(BaseModel):
     version: str = VERSION
 
 
+def clean_old_databases(mmpdb_dir: str, database_file: Optional[str] = None) -> None:
+    database_files = glob.glob(os.path.join(mmpdb_dir, 'mmpdb*.mmpdb'))
+    for f in database_files:
+        if not database_file or f != database_file:
+            # the internals of MMPDB do not close database connections
+            # so if we try to delete the database after accessing it we'll get an error
+            # this is an issue for Pyro on Windows.
+            try:
+                os.remove(f)
+            except PermissionError:
+                pass
+
+
 def build_mmp_database(mmpdb_dir: str, request: DataFunctionRequest) -> MmpdbProperties:
     fragments_file = os.path.join(mmpdb_dir, 'mmpdb.fragments.gz')
-    database_file = os.path.join(mmpdb_dir, 'mmpdb.mmpdb')
     property_file = os.path.join(mmpdb_dir, 'mmpdb.props')
     smiles_file = os.path.join(mmpdb_dir, 'mmpdb.smiles')
     settings_file = os.path.join(mmpdb_dir, 'mmpdb.settings')
@@ -58,12 +72,14 @@ def build_mmp_database(mmpdb_dir: str, request: DataFunctionRequest) -> MmpdbPro
 
         settings = MmpdbProperties.parse_raw(settings_json)
         if settings.checksum == input_data_checksum and settings.version == VERSION:
+            clean_old_databases(mmpdb_dir, settings.database_file)
             return settings
         else:
             os.remove(settings_file)
 
-    if os.path.exists(database_file):
-        os.remove(database_file)
+    clean_old_databases(mmpdb_dir)
+    uid = str(uuid.uuid4())
+    database_file = os.path.join(mmpdb_dir, f'mmpdb_{uid}.mmpdb')
 
     with open(property_file, 'w') as prop_fh, open(smiles_file, 'w') as smi_fh:
         property_name_str = ' '.join(property_names)

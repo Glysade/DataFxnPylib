@@ -41,8 +41,8 @@ def process_ig_search_results(query_sequence: SeqRecord, results: IgResult, tabl
                              contentType='chemical/x-sequence-pair', values=pairs)
     chain_column = ColumnData(name='Chain', dataType=DataType.STRING, values=chain)
     target_id_column = ColumnData(name='Target Id', dataType=DataType.STRING, values=target_ids)
-    e_value_column = ColumnData(name='EValue', dataType=DataType.FLOAT, values=evalues)
-    bit_column = ColumnData(name='Bits', dataType=DataType.FLOAT, values=bits)
+    e_value_column = ColumnData(name='EValue', dataType=DataType.DOUBLE, values=evalues)
+    bit_column = ColumnData(name='Bits', dataType=DataType.DOUBLE, values=bits)
     columns = [alignment_column, pair_column, chain_column, target_id_column, e_value_column, bit_column]
 
     output_table = TableData(tableName=table_name, columns=columns)

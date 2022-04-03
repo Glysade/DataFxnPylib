@@ -93,6 +93,9 @@ def _pairwise_alignment(method: PairwiseAlignmentMethod, query: SeqRecord, targe
     PairwiseAlignment]:
     # TODO determine if sequence is protein or dna and adjust opts
 
+    if not targets:
+        return []
+
     basename = str(uuid.uuid4())
     a_in_file = _write_in_file(basename, [query], 'a')
     b_in_file = _write_in_file(basename, targets, 'b')

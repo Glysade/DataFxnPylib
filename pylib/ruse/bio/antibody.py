@@ -193,7 +193,7 @@ def _do_align_antibody_sequences(sequences: List[SeqRecord],
         position = label_position + 1
         labelling_positions[label_no] = label_position
 
-    n_residues_after = max(len(s) - p for s, p in zip(seqs, input_positions))
+    n_residues_after = max(len(s) - p for s, p in zip(seqs, input_positions)) if seqs else 0;
     for seq_no, sequence in enumerate(seqs):
         pos = input_positions[seq_no]
         padding = n_residues_after - len(sequence) + pos
@@ -239,16 +239,18 @@ def _create_antibody_mappings(sequences: List[SeqRecord], numbering_scheme: str)
     out_file = 'anarci_numbering_{}.txt'.format(base)
     sequences_to_file(in_file, sequences)
 
-    command = AnarciCommandLine(cmd='ANARCI', sequence=in_file, scheme=numbering_scheme, outfile=out_file,
-                                restrict='ig')
-    stdout, stderr = command()
+    lines: List[str] = []
+    if sequences:
+        command = AnarciCommandLine(cmd='ANARCI', sequence=in_file, scheme=numbering_scheme, outfile=out_file,
+                                    restrict='ig')
+        stdout, stderr = command()
 
-    with open(out_file) as fh:
-        lines = fh.readlines()
+        with open(out_file) as fh:
+            lines = fh.readlines()
 
-    for file in [in_file, out_file]:
-        if os.path.exists(file):
-            os.remove(file)
+        for file in [in_file, out_file]:
+            if os.path.exists(file):
+                os.remove(file)
 
     mappings = []
     current_mapping = []

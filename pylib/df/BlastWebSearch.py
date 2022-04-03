@@ -77,9 +77,9 @@ class BlastWebSearch(DataFunction):
         target_id_column = ColumnData(name='Target Id', dataType=DataType.STRING, values=target_ids)
         target_definition_column = ColumnData(name='Target Definition', dataType=DataType.STRING,
                                               values=target_definitions)
-        e_value_column = ColumnData(name='EValue', dataType=DataType.FLOAT, values=e_values)
-        score_column = ColumnData(name='Score', dataType=DataType.INTEGER, values=scores)
-        bit_column = ColumnData(name='Bits', dataType=DataType.FLOAT, values=bits)
+        e_value_column = ColumnData(name='EValue', dataType=DataType.DOUBLE, values=e_values)
+        score_column = ColumnData(name='Score', dataType=DataType.LONG, values=scores)
+        bit_column = ColumnData(name='Bits', dataType=DataType.DOUBLE, values=bits)
         query_sequence_column = ColumnData(name='Query Sequence', dataType=DataType.STRING,
                                            contentType='chemical/x-sequence', values=query_sequences)
         target_sequence_column = ColumnData(name='Target Sequence', dataType=DataType.BINARY,

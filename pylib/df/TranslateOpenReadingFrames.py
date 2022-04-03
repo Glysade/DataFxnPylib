@@ -42,10 +42,14 @@ def find_orfs_with_trans(seq: Seq, min_protein_length: int = 50,
 
 class TranslateOpenReadingFrames(DataFunction):
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
-        input_column = next(iter(request.inputColumns.values()))
+        sequence_column_id = string_input_field(request, 'sequenceColumn')
+        id_column_id = string_input_field(request, 'idColumn')
+        sequence_column = request.inputColumns[sequence_column_id]
+        id_column = None if id_column_id is None else request.inputColumns[id_column_id]
+        input_sequences = values_to_sequences(sequence_column, id_column)
+        input_sequences = [s for s in input_sequences if s]
         min_protein_length = integer_input_field(request, 'minimumProteinLength', 100)
         codon_table_name = string_input_field(request, 'codonTableName', 'Standard')
-        input_sequences = values_to_sequences(input_column)
 
         sequence_number = []
         sequence_id = []
@@ -70,14 +74,14 @@ class TranslateOpenReadingFrames(DataFunction):
 
         protein_column = sequences_to_column(sequence, 'Protein', genbank_output=False)
         output_columns = [
-            ColumnData(name='Sequence Number', dataType=DataType.INTEGER, values=sequence_number),
+            ColumnData(name='Sequence Number', dataType=DataType.LONG, values=sequence_number),
             ColumnData(name='Sequence Id', dataType=DataType.STRING, values=sequence_id),
             protein_column,
-            ColumnData(name='Length', dataType=DataType.INTEGER, values=length),
+            ColumnData(name='Length', dataType=DataType.LONG, values=length),
             ColumnData(name='Strand', dataType=DataType.STRING, values=strands),
-            ColumnData(name='Frame', dataType=DataType.INTEGER, values=frames),
-            ColumnData(name='Start', dataType=DataType.INTEGER, values=starts),
-            ColumnData(name='End', dataType=DataType.INTEGER, values=ends)
+            ColumnData(name='Frame', dataType=DataType.LONG, values=frames),
+            ColumnData(name='Start', dataType=DataType.LONG, values=starts),
+            ColumnData(name='End', dataType=DataType.LONG, values=ends)
         ]
         output_table = TableData(tableName='Open Reading Frames', columns=output_columns)
         return DataFunctionResponse(outputTables=[output_table])

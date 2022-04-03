@@ -19,13 +19,17 @@ class BlastTableSearch(DataFunction):
         input_column.remove_nulls()
         input_sequences = values_to_sequences(input_column)
 
-        blast = BlastCreateAndSearch()
-        blast.search_blast_sequences(query, input_sequences, **args, options=options)
-        if blast.search.error is not None:
-            raise ValueError(f'Blast search exception: {blast.search.error}')
+        if input_sequences:
+            blast = BlastCreateAndSearch()
+            blast.search_blast_sequences(query, input_sequences, **args, options=options)
+            if blast.search.error is not None:
+                raise ValueError(f'Blast search exception: {blast.search.error}')
 
-        results = BlastResults()
-        results.parse(blast.search.output_file())
+            results = BlastResults()
+            results.parse(blast.search.output_file())
+            hits = results.hits
+        else:
+            hits = []
 
         name_to_index = {s.id: i for i, s in enumerate(input_sequences)}
         size = len(input_column.values)
@@ -35,11 +39,11 @@ class BlastTableSearch(DataFunction):
         bits = [None] * size
         hits_in_order = [None] * size
 
-        for hit in results.hits:
+        for hit in hits:
             name = hit.data_table_name()
             if name not in name_to_index:
                 raise ValueError('Cannot find row for sequence name {}'.format(name))
-            row_number = name_to_index[name]  # int
+            row_number: int = name_to_index[name]
             aligned_sequences[row_number] = f'{hit.query}|{hit.target}'
             e_values[row_number] = hit.evalue
             scores[row_number] = hit.score
@@ -48,9 +52,9 @@ class BlastTableSearch(DataFunction):
 
         aligned_sequences_column = ColumnData(name='Sequence Pairs', dataType=DataType.STRING,
                                               contentType='chemical/x-sequence-pair', values=aligned_sequences)
-        e_values_column = ColumnData(name='Evalue', dataType=DataType.FLOAT, values=e_values)
-        score_column = ColumnData(name='Score', dataType=DataType.INTEGER, values=scores)
-        bits_column = ColumnData(name='Bits', dataType=DataType.FLOAT, values=bits)
+        e_values_column = ColumnData(name='Evalue', dataType=DataType.DOUBLE, values=e_values)
+        score_column = ColumnData(name='Score', dataType=DataType.LONG, values=scores)
+        bits_column = ColumnData(name='Bits', dataType=DataType.DOUBLE, values=bits)
 
         null_positions = input_column.missing_null_positions
         aligned_sequences_column.insert_nulls(null_positions)

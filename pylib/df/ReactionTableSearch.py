@@ -92,7 +92,7 @@ class ReactionTableSearch(DataFunction):
         rhs_id_column = ColumnData(name=f'RHS {id_column.name}', dataType=id_column.dataType, values=to_ids)
         columns = [lhs_column, rhs_column, lhs_id_column, rhs_id_column]
         for name, d in zip(property_names, deltas):
-            column = ColumnData(name=f'Delta {name}', dataType=DataType.FLOAT, values=d)
+            column = ColumnData(name=f'Delta {name}', dataType=DataType.DOUBLE, values=d)
             columns.append(column)
         output_table = TableData(tableName='Reaction table search', columns=columns)
         response = DataFunctionResponse(outputTables=[output_table])
