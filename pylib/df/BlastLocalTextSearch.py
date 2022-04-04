@@ -21,7 +21,7 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest, o
     method = string_input_field(request, 'method')
     max_hits = integer_input_field(request, 'maxHits')
     show_multiple_alignments = boolean_input_field(request, 'showMultipleAlignments', False)
-    if len(sequences) > 1:
+    if not sequences or len(sequences) > 1:
         show_multiple_alignments = False
     if method in ['TBLASTX', 'BLASTX']:
         show_multiple_alignments = False
@@ -38,20 +38,22 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest, o
 
     search_type = BlastSearchType.from_string(method)
 
-    search.multiple_query_search_blast_database(sequences, database_name, search_type, None, options)
-    if search.error is not None:
-        raise ValueError(f'Blast search failed with error {search.error}')
-    results = MultipleBlastResults()
-    results.parse(search.output_file())
+    results: Optional[MultipleBlastResults] = None
+    if sequences:
+        search.multiple_query_search_blast_database(sequences, database_name, search_type, None, options)
+        if search.error is not None:
+            raise ValueError(f'Blast search failed with error {search.error}')
+        results = MultipleBlastResults()
+        results.parse(search.output_file())
 
-    results.retrieve_local_targets()
-    results.complement_target_sequence()
-    results.truncate_target_sequences(10_000)
+        results.retrieve_local_targets()
+        results.complement_target_sequence()
+        results.truncate_target_sequences(10_000)
+        assert len(sequences) == len(results.query_hits)
 
     if not sequence_column_type:
         sequence_column_type = 'chemical/x-sequence'
     genbank = sequence_column_type == 'chemical/x-genbank'
-    assert len(sequences) == len(results.query_hits)
 
     alignments = []
     target_ids = []
@@ -76,30 +78,31 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest, o
         query_sequences.append(None)
         target_sequences.append(None)
 
-    for query_sequence, query_result in zip(sequences, results.query_hits):
-        query_seq_str = sequence_to_genbank_base64_str(query_sequence) if genbank else str(
-            query_sequence.seq)
-        for hit in query_result.hits:
-            align_str = '{}|{}'.format(hit.query, hit.target)
-            if hit.target_record and is_defined_sequence(hit.target_record.seq):
-                hit_seq_str = sequence_to_genbank_base64_str(
-                    hit.target_record) if genbank else str(hit.target_record.seq)
-            else:
-                hit_seq_str = None
+    if sequences:
+        for query_sequence, query_result in zip(sequences, results.query_hits):
+            query_seq_str = sequence_to_genbank_base64_str(query_sequence) if genbank else str(
+                query_sequence.seq)
+            for hit in query_result.hits:
+                align_str = '{}|{}'.format(hit.query, hit.target)
+                if hit.target_record and is_defined_sequence(hit.target_record.seq):
+                    hit_seq_str = sequence_to_genbank_base64_str(
+                        hit.target_record) if genbank else str(hit.target_record.seq)
+                else:
+                    hit_seq_str = None
 
-            alignments.append(align_str)
-            target_ids.append(hit.target_id)
-            target_definitions.append(hit.target_def)
-            query_ids.append(query_sequence.id)
-            query_definitions.append(query_sequence.description)
-            e_values.append(hit.evalue)
-            scores.append(hit.score)
-            bits.append(hit.bits)
-            query_sequences.append(query_seq_str)
-            target_sequences.append(hit_seq_str)
+                alignments.append(align_str)
+                target_ids.append(hit.target_id)
+                target_definitions.append(hit.target_def)
+                query_ids.append(query_sequence.id)
+                query_definitions.append(query_sequence.description)
+                e_values.append(hit.evalue)
+                scores.append(hit.score)
+                bits.append(hit.bits)
+                query_sequences.append(query_seq_str)
+                target_sequences.append(hit_seq_str)
 
-        if show_multiple_alignments:
-            multiple_alignments = build_common_alignments(query_sequence, query_result.hits)
+            if show_multiple_alignments:
+                multiple_alignments = build_common_alignments(query_sequence, query_result.hits)
 
     sequence_data_type = DataType.BINARY if genbank else DataType.STRING
     aligned_sequences_column = ColumnData(name='Aligned Sequence Pairs', dataType=DataType.STRING,
@@ -109,7 +112,7 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest, o
                                           values=target_definitions)
     query_id_column = ColumnData(name='Query Id', dataType=DataType.STRING, values=query_ids)
     query_definition_column = ColumnData(name='Query Definition', dataType=DataType.STRING,
-                                          values=query_definitions)
+                                         values=query_definitions)
     e_value_column = ColumnData(name='EValue', dataType=DataType.DOUBLE, values=e_values)
     score_column = ColumnData(name='Score', dataType=DataType.LONG, values=scores)
     bit_column = ColumnData(name='Bits', dataType=DataType.DOUBLE, values=bits)
@@ -130,7 +133,8 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest, o
         multiple_alignment_column = sequences_to_column(multiple_alignments, 'Aligned Sequence', True)
         antibody_numbering = numbering_and_regions_from_sequence(multiple_alignments[0])
         if antibody_numbering:
-            multiple_alignment_column.properties[ANTIBODY_NUMBERING_COLUMN_PROPERTY] = antibody_numbering.to_column_json()
+            multiple_alignment_column.properties[
+                ANTIBODY_NUMBERING_COLUMN_PROPERTY] = antibody_numbering.to_column_json()
         columns.insert(0, multiple_alignment_column)
     output_table = TableData(tableName=output_table_name,
                              columns=columns)
