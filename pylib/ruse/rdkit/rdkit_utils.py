@@ -195,7 +195,11 @@ def mol_to_string(type: RDKitFormat, mol: Mol, isomeric_smiles=True) -> str:
         # mol_string = Chem.MolToMolBlock(mol)
         sdf_in = StringIO()
         writer = Chem.SDWriter(sdf_in)
-        writer.write(mol)
+        try:
+            writer.write(mol)
+        except KekulizeException:
+            writer.SetKekulize(False)
+            writer.write(mol)
         writer.flush()
         mol_string = sdf_in.getvalue()
         sdf_in.close()
