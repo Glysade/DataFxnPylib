@@ -1,10 +1,15 @@
 import importlib
+import sys
 
 from df.data_transfer import DataFunctionRequest, DataFunction
 
 if __name__ == '__main__':
-    in_file = 'in.json'
-    out_file = 'out.json'
+    if len(sys.argv) == 3:
+        in_file = sys.argv[1]
+        out_file = sys.argv[2]
+    else:
+        in_file = 'in.json'
+        out_file = 'out.json'
 
     with open(in_file, 'r') as fh:
         request_json = fh.read()

@@ -5,7 +5,7 @@ from typing import Optional, Any, Dict, List
 from pydantic import BaseModel
 
 
-# I wanted to use this type instead of any for column/inputField values, but it coerces values to strings with used
+# I wanted to use this type instead of any for column/inputField values, but it coerces values to strings when used
 # with pydantic
 # DataValue = Union[str, int, float, bool]
 
