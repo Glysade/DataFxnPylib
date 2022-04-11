@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, List
 
 from Bio.Data import CodonTable
 from Bio.Seq import Seq
@@ -11,7 +11,7 @@ from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResp
 
 # adapted from BioPython tutorial
 def find_orfs_with_trans(seq: Seq, min_protein_length: int = 50,
-                         trans_table: str = 'Standard') -> Tuple[int, int, int, Seq, int]:
+                         trans_table: str = 'Standard') -> List[Tuple[int, int, int, Seq, int]]:
     answer = []
     seq_len = len(seq)
     for strand, nuc in [(+1, seq), (-1, seq.reverse_complement())]:

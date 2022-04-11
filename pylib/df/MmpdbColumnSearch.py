@@ -132,13 +132,17 @@ def build_mmp_database(mmpdb_dir: str, request: DataFunctionRequest) -> MmpdbPro
     return settings
 
 
+def generate_mmpdb_dir(request: DataFunctionRequest) -> str:
+    structure_column_id = string_input_field(request, 'structureColumn')
+    mmpdb_dir = re.sub('[^A-Za-z0-9 ]+', '', structure_column_id)
+    mmpdb_dir = re.sub(' ', '_', mmpdb_dir)
+    mmpdb_dir = os.path.join(tempfile.gettempdir(), 'ChemChartsData', f'mmpdb_{mmpdb_dir}')
+    return mmpdb_dir
+
+
 class MmpdbColumnSearch(DataFunction):
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
-        structure_column_id = string_input_field(request, 'structureColumn')
-        mmpdb_dir = re.sub('[^A-Za-z0-9 ]+', '', structure_column_id)
-        mmpdb_dir = re.sub(' ', '_', mmpdb_dir)
-        mmpdb_dir = os.path.join(tempfile.gettempdir(), 'ChemChartsData', f'mmpdb_{mmpdb_dir}')
-
+        mmpdb_dir = generate_mmpdb_dir(request)
         settings = build_mmp_database(mmpdb_dir, request)
 
         query_smiles, query_mol = mmpdb_query(request)
