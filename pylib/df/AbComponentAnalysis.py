@@ -105,8 +105,8 @@ class AbComponentAnalysis(DataFunction):
         columns.append(ColumnData(name='Source Column', dataType=DataType.STRING, values=src))
         columns.append(ColumnData(name='LHS ID', dataType=inColumns[idColumn].dataType, values=lhsId))
         columns.append(ColumnData(name='RHS ID', dataType=inColumns[idColumn].dataType, values=rhsId))
-        columns.append(ColumnData(name='LHS Sequence', dataType=DataType.STRING, values=lhsSeq))
-        columns.append(ColumnData(name='RHS Sequence', dataType=DataType.STRING, values=rhsSeq))
+        columns.append(ColumnData(name='LHS Sequence', dataType=DataType.STRING, contentType='chemical/x-sequence', values=lhsSeq))
+        columns.append(ColumnData(name='RHS Sequence', dataType=DataType.STRING, contentType='chemical/x-sequence', values=rhsSeq))
         columns.append(ColumnData(name='Sequence Pair', dataType=DataType.STRING, contentType='chemical/x-sequence-pair', values=seqPair))
         columns.append(ColumnData(name='BLOSUM Score', dataType=DataType.DOUBLE, values=blosumScore))
         for id in dataColumnVals:
