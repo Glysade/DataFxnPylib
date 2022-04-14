@@ -97,10 +97,11 @@ def build_mmp_database(mmpdb_dir: str, request: DataFunctionRequest) -> MmpdbPro
 
     # build fragments file
     n_proc = multiprocessing.cpu_count()
+    rdbase = os.environ['RDBASE']
+    salts_file = os.path.join(rdbase, 'Data', 'Salts.txt')
     # args = ['fragment', '--in', 'smi', '--out', 'fragments.gz', '--num-jobs', str(n_proc), '--output',
     args = ['fragment', '--in', 'smi', '--num-jobs', str(n_proc), '--output',
-            fragments_file, '--delimiter',
-            'space', smiles_file]
+            fragments_file, '--salt-remover', salts_file, '--delimiter', 'space', smiles_file]
     try:
         mmp.main(args=args, standalone_mode=False)
     except TypeError:
