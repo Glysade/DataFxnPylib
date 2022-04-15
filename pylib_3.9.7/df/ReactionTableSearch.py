@@ -94,6 +94,6 @@ class ReactionTableSearch(DataFunction):
         for name, d in zip(property_names, deltas):
             column = ColumnData(name=f'Delta {name}', dataType=DataType.DOUBLE, values=d)
             columns.append(column)
-        output_table = TableData(tableName='Reaction table search', columns=columns)
+        output_table = TableData(tableName='Pair Finder Results', columns=columns)
         response = DataFunctionResponse(outputTables=[output_table])
         return response
