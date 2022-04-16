@@ -1,3 +1,5 @@
+import base64
+import gzip
 import sqlite3
 from typing import List, Tuple
 
@@ -25,7 +27,7 @@ def database_properties(database_path: str) -> List[str]:
     return properties
 
 
-def mmpdb_query(request: DataFunctionRequest) -> Tuple[str, Mol]:
+def mmpdb_query(request: DataFunctionRequest) -> Tuple[str, Mol, str]:
     input_query_mol: Mol = input_field_to_molecule(request, 'queryData')
     # Sanitize to ensure conversion to whole structure from MOL block
     sanitize_mol(input_query_mol)
@@ -36,11 +38,17 @@ def mmpdb_query(request: DataFunctionRequest) -> Tuple[str, Mol]:
         mcs: MCSResult = rdFMCS.FindMCS([input_query_mol, query_mol])
         if mcs.numAtoms > 2 and mcs.numBonds > 2:
             rdDepictor.GenerateDepictionMatching2DStructure(query_mol, input_query_mol, refPatt=mcs.queryMol)
-    return query_smiles, query_mol
+    # input_query = string_input_field(request, 'queryData')
+    input_query = Chem.MolToMolBlock(query_mol)
+    mol_gzip = gzip.compress(bytes(input_query, 'utf-8'))
+    query_property = base64.b64encode(mol_gzip).decode('utf-8')
+
+    return query_smiles, query_mol, query_property
 
 
-def search_mmpdb(query_smiles: str, query_mol: Mol, property_names: list[str],
+def search_mmpdb(request: DataFunctionRequest, property_names: list[str],
                  mmpdb_database_file: str, output_table_name: str) -> DataFunctionResponse:
+    query_smiles, query_mol, query_property = mmpdb_query(request)
     mmp_result: TransformResult = transform(query_smiles, property_names, mmpdb_database_file)
     mmp_transforms: MmpTransform = result_to_mmp_transform(query_mol, mmp_result)
 
@@ -71,6 +79,7 @@ def search_mmpdb(query_smiles: str, query_mol: Mol, property_names: list[str],
             p_list.append(p)
 
     query_column = molecules_to_column(queries, 'Query', DataType.BINARY)
+    query_column.properties['mmpInputQuery'] = query_property
     product_column = molecules_to_column(products, 'Product', DataType.BINARY)
     from_column = molecules_to_column(froms, 'From', DataType.BINARY)
     to_column = molecules_to_column(tos, 'To', DataType.BINARY)
@@ -98,6 +107,5 @@ class MmpdbDatabaseSearch(DataFunction):
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         mmpdb_database_file = string_input_field(request, 'mmpdbDatabasePath')
 
-        query_smiles, query_mol = mmpdb_query(request)
         property_names = database_properties(mmpdb_database_file)
-        return search_mmpdb(query_smiles, query_mol, property_names, mmpdb_database_file, 'MMPDB database search')
+        return search_mmpdb(request, property_names, mmpdb_database_file, 'MMPDB database search')

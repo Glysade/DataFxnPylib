@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from typing import List, Final, Optional
 
-from df.MmpdbDatabaseSearch import mmpdb_query, search_mmpdb
+from df.MmpdbDatabaseSearch import search_mmpdb
 
 try:
     from mmpdblib import commandline as mmp
@@ -146,6 +146,4 @@ class MmpdbColumnSearch(DataFunction):
         mmpdb_dir = generate_mmpdb_dir(request)
         settings = build_mmp_database(mmpdb_dir, request)
 
-        query_smiles, query_mol = mmpdb_query(request)
-        return search_mmpdb(query_smiles, query_mol, settings.property_names, settings.database_file,
-                            'MMPDB table search')
+        return search_mmpdb(request, settings.property_names, settings.database_file, 'MMPDB table search')
