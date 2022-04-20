@@ -129,6 +129,7 @@ def label_antibody_sequences(sequences: List[SeqRecord], numbering_scheme: str =
 
 def align_antibody_sequences(sequences: List[SeqRecord], numbering_scheme: str = 'kabat',
                              cdr_definition: str = 'kabat') -> AntibodyAlignmentResult:
+    sequences = [SeqRecord(s.seq.ungap(), s.id, s.name, s.description) for s in sequences]
     mappings = label_antibody_sequences(sequences, numbering_scheme, cdr_definition)
     alignments = _do_align_antibody_sequences(sequences, mappings, numbering_scheme, cdr_definition)
     return alignments
