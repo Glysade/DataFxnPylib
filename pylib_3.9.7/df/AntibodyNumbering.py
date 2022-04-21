@@ -28,6 +28,7 @@ class AntibodyNumbering(DataFunction):
 
         rows = [sequence_to_genbank_base64_str(s) for s in output_sequences]
         properties = {ANTIBODY_NUMBERING_COLUMN_PROPERTY: numbering_json}
+
         output_column = ColumnData(name='Aligned Sequence', dataType=DataType.BINARY, properties=properties,
                                    contentType='chemical/x-genbank', values=rows)
         output_column.insert_nulls(input_column.missing_null_positions)

@@ -433,49 +433,50 @@ def _annotate_sequence(record: SeqRecord, number_mapping: List[AntibodyNumberMap
         if start <= start1:
             name = '{}FR1'.format(chain)
             fr1_feature = SeqFeature(FeatureLocation(start, start1), type='region',
-                                     qualifiers={'note': region_note(region, name)})
+                                     qualifiers={'region_name': name, 'note': region_note(region, name)})
             record.features.append(fr1_feature)
 
         if start1 <= end1 + 1:
             name = 'CDR-{}1'.format(chain)
             h1_feature = SeqFeature(FeatureLocation(start1, end1 + 1), type='region',
-                                    qualifiers={'note': region_note(region, name)})
+                                    qualifiers={'region_name': name, 'note': region_note(region, name)})
             record.features.append(h1_feature)
 
         if end1 + 1 <= start2:
             name = '{}FR2'.format(chain)
             fr1_feature = SeqFeature(FeatureLocation(end1 + 1, start2), type='region',
-                                     qualifiers={'note': region_note(region, name)})
+                                     qualifiers={'region_name': name, 'note': region_note(region, name)})
             record.features.append(fr1_feature)
 
         if start2 <= end2 + 1:
             name = 'CDR-{}2'.format(chain)
             h1_feature = SeqFeature(FeatureLocation(start2, end2 + 1), type='region',
-                                    qualifiers={'note': region_note(region, name)})
+                                    qualifiers={'region_name': name, 'note': region_note(region, name)})
             record.features.append(h1_feature)
 
         if end2 + 1 <= start3:
             name = '{}FR3'.format(chain)
             fr1_feature = SeqFeature(FeatureLocation(end2 + 1, start3), type='region',
-                                     qualifiers={'note': region_note(region, name)})
+                                     qualifiers={'region_name': name, 'note': region_note(region, name)})
             record.features.append(fr1_feature)
 
         if start3 <= end3 + 1:
             name = 'CDR-{}3'.format(chain)
             h1_feature = SeqFeature(FeatureLocation(start3, end3 + 1), type='region',
-                                    qualifiers={'note': region_note(region, name)})
+                                    qualifiers={'region_name': name, 'note': region_note(region, name)})
             record.features.append(h1_feature)
 
         if end3 + 1 <= end + 1:
             name = '{}FR4'.format(chain)
             fr1_feature = SeqFeature(FeatureLocation(end3 + 1, end + 1), type='region',
-                                     qualifiers={'note': region_note(region, name)})
+                                     qualifiers={'region_name': name, 'note': region_note(region, name)})
             record.features.append(fr1_feature)
 
     for num in mapping:
         if num.query_position is not None:
             num_feature = SeqFeature(FeatureLocation(num.query_position, num.query_position + 1), type='misc_feature',
-                                     qualifiers={'note': ['antibody_number: {}'.format(num.label()),
+                                     qualifiers={'feature_name': num.label(),
+                                                 'note': ['antibody_number: {}'.format(num.label()),
                                                           'antibody_domain: {}'.format(num.domain),
                                                           'antibody_chain: {}'.format(num.chain),
                                                           'cdr_definition: {}'.format(cdr_definition),

@@ -75,6 +75,9 @@ def genbank_base64_str_to_sequence(data: str, row_index: int) -> SeqRecord:
             return record
         except UnicodeDecodeError:
             pass
+        except ValueError as err:
+            raise ValueError(f"Genbank entry appears to be malformed: {err}")
+
     raise UnicodeDecodeError("Unable to decode genbank cell")
 
 
