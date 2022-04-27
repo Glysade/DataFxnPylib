@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional, Union
+from typing import List, Dict, Optional, Union, Tuple
 
 from rdkit import Chem
 from rdkit.Chem import AllChem
@@ -11,10 +11,17 @@ from ruse.rdkit.rdkit_utils import sanitize_mol
 
 
 class ReactionTableSearch(DataFunction):
+    """
+    A data function that performs reaction pair finding
+    """
+
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
 
-        def delta(from_row: int, to_row: int, props: List[List[Optional[float]]]) -> List[Optional[float]]:
+        def delta(from_row: int, to_row: int, props: List[List[Optional[float]]]) -> Tuple[
+            List[Optional[float]], List[Optional[float]], List[Optional[float]]]:
             ds: list[Optional[float]] = []
+            froms: list[Optional[float]] = []
+            tos: list[Optional[float]] = []
             for p in props:
                 p1 = p[from_row]
                 p2 = p[to_row]
@@ -22,8 +29,10 @@ class ReactionTableSearch(DataFunction):
                     diff = p2 - p1
                 else:
                     diff = None
+                froms.append(p1)
+                tos.append(p2)
                 ds.append(diff)
-            return ds
+            return froms, tos, ds
 
         rxn_field = request.inputFields['reactionQuery']
         rxn_text = str(rxn_field.data)
@@ -38,6 +47,7 @@ class ReactionTableSearch(DataFunction):
             rxn = AllChem.ReactionFromRxnBlock(rxn_text)
         else:
             raise ValueError(f'Unable to convert content type {rxn_content_type} to reaction')
+        AllChem.SanitizeRxn(rxn)
         if rxn.GetNumProductTemplates() != 1:
             raise ValueError('Number of products in reaction is not one')
         if rxn.GetNumReactantTemplates() != 1:
@@ -58,8 +68,13 @@ class ReactionTableSearch(DataFunction):
         from_ids: List[Union[str, int]] = []
         to_ids: List[Union[str, int]] = []
         deltas: List[List[Optional[float]]] = []
+        from_properties: List[List[Optional[float]]] = []
+        to_properties: List[List[Optional[float]]] = []
         for _ in range(len(property_names)):
             deltas.append([])
+            from_properties.append([])
+            to_properties.append([])
+            from_properties.append([])
 
         for row, structure in enumerate(structures):
             if not structure:
@@ -82,17 +97,25 @@ class ReactionTableSearch(DataFunction):
                     rhs.append(structures[other_row])
                     from_ids.append(from_id)
                     to_ids.append(to_id)
-                    d = delta(row, other_row, properties)
+                    f, t, d = delta(row, other_row, properties)
                     for i, v in enumerate(d):
                         deltas[i].append(v)
+                    for i, v in enumerate(f):
+                        from_properties[i].append(v)
+                    for i, v in enumerate(t):
+                        to_properties[i].append(v)
 
         lhs_column = molecules_to_column(lhs, 'LHS', DataType.BINARY)
         rhs_column = molecules_to_column(rhs, 'RHS', DataType.BINARY)
         lhs_id_column = ColumnData(name=f'LHS {id_column.name}', dataType=id_column.dataType, values=from_ids)
         rhs_id_column = ColumnData(name=f'RHS {id_column.name}', dataType=id_column.dataType, values=to_ids)
         columns = [lhs_column, rhs_column, lhs_id_column, rhs_id_column]
-        for name, d in zip(property_names, deltas):
-            column = ColumnData(name=f'Delta {name}', dataType=DataType.DOUBLE, values=d)
+        for index, name in enumerate(property_names):
+            column = ColumnData(name=f'LHS {name}', dataType=DataType.DOUBLE, values=from_properties[index])
+            columns.append(column)
+            column = ColumnData(name=f'RHS {name}', dataType=DataType.DOUBLE, values=to_properties[index])
+            columns.append(column)
+            column = ColumnData(name=f'Delta {name}', dataType=DataType.DOUBLE, values=deltas[index])
             columns.append(column)
         output_table = TableData(tableName='Pair Finder Results', columns=columns)
         response = DataFunctionResponse(outputTables=[output_table])

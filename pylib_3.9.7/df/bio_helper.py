@@ -1,3 +1,14 @@
+"""
+=============
+bio_helper.py
+=============
+
+Helper functions for data functions that manipulate biological sequences.
+
+`Biopython <https://biopython.org/>`_ SeqRecord objects are used to represent sequences
+
+"""
+
 from io import StringIO
 from typing import List, Optional
 
@@ -11,6 +22,13 @@ from ruse.bio.bio_data_table_helper import genbank_base64_str_to_sequence, seque
 
 
 def values_to_sequences(column: ColumnData, id_column: Optional[ColumnData] = None) -> List[Optional[SeqRecord]]:
+    """
+    Converts a Spotfire column into a list of sequence records
+
+    :param column:  the Spotfire column
+    :param id_column:  if set, row values from this column are used to set the sequence identifier
+    :return: sequence records
+    """
     content_type = column.contentType
     if content_type == 'chemical/x-sequence':
         sequences = [string_to_sequence(s, index) if s else None for (index, s) in
@@ -28,6 +46,14 @@ def values_to_sequences(column: ColumnData, id_column: Optional[ColumnData] = No
 
 
 def sequences_to_column(sequences: List[Optional[SeqRecord]], column_name: str, genbank_output=True) -> ColumnData:
+    """
+    Converts a list of sequence records to a Spotfire column object
+
+    :param sequences: The list of sequences
+    :param column_name: The name of the new column
+    :param genbank_output: if set true (the default) the returned column will contain binary encoded Genbank records (otherwise string sequences will be used)
+    :return: Spotfire column
+    """
     def encode_seq(seq):
         if not seq:
             return None
@@ -43,6 +69,14 @@ def sequences_to_column(sequences: List[Optional[SeqRecord]], column_name: str, 
 
 
 def query_from_request(request: DataFunctionRequest, input_field_name: str = 'query') -> SeqRecord:
+    """
+    Converts a string input field into sequence request.  The function will attempt to parse Genbank then fasta formats.
+    If neither works the input field data will be used a raw sequence.
+
+    :param request: the request
+    :param input_field_name: the input field name
+    :return: the extracted sequence
+    """
     query = string_input_field(request, input_field_name)
     if not query:
         raise ValueError()

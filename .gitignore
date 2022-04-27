@@ -1,0 +1,24 @@
+
+# Intellij
+.idea/
+*.iml
+*.iws
+
+#python
+__pycache__
+*~
+*.log
+*.pyc
+
+# Sphinx
+_build/
+_templates/
+_static/
+
+# test output
+output/
+# test folder
+test/
+
+# misc
+nohup.out
