@@ -1,10 +1,10 @@
 
-df Modules
-======================================
+Data Function Core API
+======================
 
 .. toctree::
    :maxdepth: 4
-   :caption: Contents:
+   :caption: API:
 
 .. automodule:: df.data_transfer
    :members:
