@@ -21,7 +21,7 @@ from ruse.bio.bio_data_table_helper import genbank_base64_str_to_sequence, seque
     string_to_sequence
 
 
-def values_to_sequences(column: ColumnData, id_column: Optional[ColumnData] = None) -> List[Optional[SeqRecord]]:
+def column_to_sequences(column: ColumnData, id_column: Optional[ColumnData] = None) -> List[Optional[SeqRecord]]:
     """
     Converts a Spotfire column into a list of sequence records
 
@@ -70,7 +70,8 @@ def sequences_to_column(sequences: List[Optional[SeqRecord]], column_name: str, 
 
 def query_from_request(request: DataFunctionRequest, input_field_name: str = 'query') -> SeqRecord:
     """
-    Converts a string input field into sequence request.  The function will attempt to parse Genbank then fasta formats.
+    Converts a string input field into sequence request.  The function will attempt to parse Genbank, then fasta
+    formats.
     If neither works the input field data will be used a raw sequence.
 
     :param request: the request

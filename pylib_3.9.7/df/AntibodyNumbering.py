@@ -1,6 +1,6 @@
 import json
 
-from df.bio_helper import values_to_sequences
+from df.bio_helper import column_to_sequences
 from df.data_transfer import ColumnData, DataFunctionRequest, DataFunctionResponse, DataFunction, string_input_field, \
     DataType
 from ruse.bio.antibody import align_antibody_sequences, ANTIBODY_NUMBERING_COLUMN_PROPERTY
@@ -11,7 +11,7 @@ class AntibodyNumbering(DataFunction):
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         input_column = next(iter(request.inputColumns.values()))
         input_column.remove_nulls()
-        input_sequences = values_to_sequences(input_column)
+        input_sequences = column_to_sequences(input_column)
         numbering_scheme = string_input_field(request, 'numberingScheme', 'chothia')
         cdr_definition = string_input_field(request, 'cdrDefinition', 'chothia')
         if not cdr_definition:

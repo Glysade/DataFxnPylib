@@ -1,6 +1,6 @@
 import json
 import ruse.bio
-from df.bio_helper import values_to_sequences, sequences_to_column
+from df.bio_helper import column_to_sequences, sequences_to_column
 
 from df.data_transfer import ColumnData, DataFunctionRequest, DataFunctionResponse, DataFunction, string_input_field, \
     DataType
@@ -12,7 +12,7 @@ class MultipleSequenceAlignment(DataFunction):
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         input_column = next(iter(request.inputColumns.values()))
         input_column.remove_nulls()
-        input_sequences = values_to_sequences(input_column)
+        input_sequences = column_to_sequences(input_column)
         alignment_method_str = string_input_field(request, 'alignmentMethod', 'clustalo')
 
         alignment_method = SequenceAlignmentMethod[alignment_method_str.upper()]

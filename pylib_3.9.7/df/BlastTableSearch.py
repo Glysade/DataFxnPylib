@@ -1,4 +1,4 @@
-from df.bio_helper import values_to_sequences, query_from_request, sequences_to_column
+from df.bio_helper import column_to_sequences, query_from_request, sequences_to_column
 from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResponse, ColumnData, \
     DataType, boolean_input_field
 from ruse.bio.blast_parse import BlastResults, build_common_alignments
@@ -17,7 +17,7 @@ class BlastTableSearch(DataFunction):
 
         input_column = next(iter(request.inputColumns.values()))
         input_column.remove_nulls()
-        input_sequences = values_to_sequences(input_column)
+        input_sequences = column_to_sequences(input_column)
 
         if input_sequences:
             blast = BlastCreateAndSearch()

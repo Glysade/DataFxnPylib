@@ -4,7 +4,7 @@ from Bio.Seq import Seq
 from Bio.SeqFeature import SeqFeature
 from Bio.SeqRecord import SeqRecord
 
-from df.bio_helper import values_to_sequences, sequences_to_column
+from df.bio_helper import column_to_sequences, sequences_to_column
 from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResponse, integer_input_field, \
     string_input_field
 
@@ -40,7 +40,7 @@ class ExtractGenbankRegions(DataFunction):
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         input_column = next(iter(request.inputColumns.values()))
         input_column.remove_nulls()
-        input_sequences = values_to_sequences(input_column)
+        input_sequences = column_to_sequences(input_column)
         max_number_of_regions = integer_input_field(request, 'maximumNumberRegions')
         feature_key = string_input_field(request, 'featureKey')
         feature_qualifier = string_input_field(request, 'featureQualifier')

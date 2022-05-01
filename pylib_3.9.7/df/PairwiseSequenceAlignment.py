@@ -1,7 +1,7 @@
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-from df.bio_helper import values_to_sequences, sequences_to_column, query_from_request
+from df.bio_helper import column_to_sequences, sequences_to_column, query_from_request
 from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResponse, string_input_field, DataType, \
     ColumnData
 from ruse.bio.pairwise_alignment import PairwiseAlignmentMethod, needle_pairwise_alignment, water_pairwise_alignment
@@ -13,7 +13,7 @@ class PairwiseSequenceAlignment(DataFunction):
         input_column = next(iter(request.inputColumns.values()))
         input_column.remove_nulls()
         genbank = input_column.contentType == 'chemical/x-genbank'
-        input_sequences = values_to_sequences(input_column)
+        input_sequences = column_to_sequences(input_column)
         query = query_from_request(request, 'query')
 
         method_name = string_input_field(request, 'method', 'needle')

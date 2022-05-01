@@ -4,7 +4,7 @@ from Bio.Data import CodonTable
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-from df.bio_helper import values_to_sequences, sequences_to_column
+from df.bio_helper import column_to_sequences, sequences_to_column
 from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResponse, ColumnData, DataType, TableData, \
     integer_input_field, string_input_field
 
@@ -46,7 +46,7 @@ class TranslateOpenReadingFrames(DataFunction):
         id_column_id = string_input_field(request, 'idColumn')
         sequence_column = request.inputColumns[sequence_column_id]
         id_column = None if id_column_id is None else request.inputColumns[id_column_id]
-        input_sequences = values_to_sequences(sequence_column, id_column)
+        input_sequences = column_to_sequences(sequence_column, id_column)
         input_sequences = [s for s in input_sequences if s]
         min_protein_length = integer_input_field(request, 'minimumProteinLength', 100)
         codon_table_name = string_input_field(request, 'codonTableName', 'Standard')

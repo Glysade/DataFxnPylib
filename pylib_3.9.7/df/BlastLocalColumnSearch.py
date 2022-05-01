@@ -1,7 +1,7 @@
 import os
 
 from df.BlastLocalTextSearch import run_blast_search
-from df.bio_helper import values_to_sequences
+from df.bio_helper import column_to_sequences
 from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResponse, string_input_field
 
 
@@ -12,7 +12,7 @@ class BlastLocalColumnSearch(DataFunction):
         id_column_id = string_input_field(request, 'idColumn')
         sequence_column = request.inputColumns[sequence_column_id]
         id_column = None if id_column_id is None else request.inputColumns[id_column_id]
-        input_sequences = values_to_sequences(sequence_column, id_column)
+        input_sequences = column_to_sequences(sequence_column, id_column)
         input_sequences = [s for s in input_sequences if s]
         blastdb = string_input_field(request, 'blastDbPath')
         os.environ['BLASTDB'] = blastdb

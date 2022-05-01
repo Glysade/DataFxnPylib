@@ -2,7 +2,7 @@ from Bio.Restriction import RestrictionBatch, AllEnzymes, CommOnly
 from Bio.SeqFeature import SeqFeature, FeatureLocation
 from Bio.SeqRecord import SeqRecord
 
-from df.bio_helper import values_to_sequences
+from df.bio_helper import column_to_sequences
 from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResponse, ColumnData, \
     DataType, string_list_input_field
 from ruse.bio.bio_data_table_helper import sequence_to_genbank_base64_str
@@ -46,7 +46,7 @@ class EnzymeRestriction(DataFunction):
             rb = RestrictionBatch(enzyme_names)
 
         input_column = next(iter(request.inputColumns.values()))
-        input_sequences = values_to_sequences(input_column)
+        input_sequences = column_to_sequences(input_column)
         output_sequences = [search_sequence(s, rb) for s in input_sequences]
 
         rows = [sequence_to_genbank_base64_str(s) for s in output_sequences]

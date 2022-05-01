@@ -3,7 +3,7 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio.Align import substitution_matrices
 
-from df.bio_helper import values_to_sequences, sequences_to_column
+from df.bio_helper import column_to_sequences, sequences_to_column
 from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResponse, string_input_field, DataType, \
     ColumnData, TableData
 

@@ -2,7 +2,7 @@ from Bio.Data import CodonTable
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-from df.bio_helper import values_to_sequences, sequences_to_column
+from df.bio_helper import column_to_sequences, sequences_to_column
 from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResponse, string_input_field
 from ruse.bio.bio_util import is_dna_record
 
@@ -24,7 +24,7 @@ class TranslateSequences(DataFunction):
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         input_column = next(iter(request.inputColumns.values()))
-        input_sequences = values_to_sequences(input_column)
+        input_sequences = column_to_sequences(input_column)
         codon_table_name = string_input_field(request, 'codonTableName', 'Standard')
         output_sequences = [None if s is None else translate(s, codon_table_name) for s in input_sequences]
         output_column = sequences_to_column(output_sequences, f'Translated {input_column.name}', genbank_output=False)
