@@ -3,7 +3,7 @@
 bio_data_table_helper.py
 ========================
 
-Copyright (C) 2017 Anodyne Informatics, LLC
+Copyright (C) 2017-2022 Glysade, LLC
 
 Functions for adding sequence data to and extracting sequence data from :class:`ruse.util.data_table.DataTable` objects
 

@@ -26,9 +26,3 @@ ruse.bio Modules
 
 .. automodule:: ruse.bio.phylo_tree
    :members:
-
-Indices and tables
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`

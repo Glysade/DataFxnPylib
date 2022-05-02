@@ -3,7 +3,7 @@
 data_table.py
 ===============
 
-Copyright (C) 2017 Anodyne Informatics, LLC
+Copyright (C) 2017-2022 Glysade, LLC
 
 The data table class
 """

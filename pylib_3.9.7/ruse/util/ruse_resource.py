@@ -3,7 +3,7 @@
 ruse_resource.py
 ================
 
-Copyright (C) 2017 Anodyne Informatics, LLC
+Copyright (C) 2017-2022 Glysade, LLC
 
 Contains a class for manipulating ruse resources
 

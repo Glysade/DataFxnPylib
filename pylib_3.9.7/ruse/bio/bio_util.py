@@ -3,7 +3,7 @@
 bio_util.py
 ===========
 
-Copyright (C) 2017 Anodyne Informatics, LLC
+Copyright (C) 2017-2022 Glysade, LLC
 
 A number of utility functions to augment Biopython functionality
 """

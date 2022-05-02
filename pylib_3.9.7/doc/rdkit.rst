@@ -11,9 +11,3 @@ ruse.rdkit Modules
 
 .. automodule:: ruse.rdkit.rgroup
    :members:
-
-Indices and tables
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`

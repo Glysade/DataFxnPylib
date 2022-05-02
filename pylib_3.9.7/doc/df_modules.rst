@@ -1,3 +1,4 @@
+.. _df-modules:
 
 Builtin Data Function Modules
 ======================================
@@ -59,9 +60,3 @@ Builtin Data Function Modules
 
 .. automodule:: df.TranslateSequences
    :members:
-
-Indices and tables
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`

@@ -7,9 +7,3 @@ ruse.chem Modules
 
 .. automodule:: ruse.chem.chem_data_table_helper
    :members:
-
-Indices and tables
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`

@@ -3,7 +3,7 @@
 blast_parse.py
 ==============
 
-Copyright (C) 2017 Anodyne Informatics, LLC
+Copyright (C) 2017-2022 Glysade, LLC
 
 Classes for parsing the results from Blast searches
 """

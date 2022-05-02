@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Ruse PyLib documentation build configuration file, created by
+# Data Function PyLib documentation build configuration file, created by
 # sphinx-quickstart on Fri Jun  9 21:03:24 2017.
 #
 # This file is execfile()d with the current directory set to its
@@ -51,9 +51,9 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = 'Ruse PyLib'
-copyright = '2017-2019, Anodyne Informatics, LLC'
-author = 'Anodyne Informatics, LLC'
+project = 'Data Function PyLib'
+copyright = '2017-2022, Glysade, LLC'
+author = 'Glysade, LLC'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -106,7 +106,7 @@ html_static_path = ['_static']
 # -- Options for HTMLHelp output ------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'RusePyLibdoc'
+htmlhelp_basename = 'DataFunctionPyLibdoc'
 
 
 # -- Options for LaTeX output ---------------------------------------------
@@ -133,8 +133,8 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'RusePyLib.tex', 'Ruse PyLib Documentation',
-     'Gareth Jones, Matt Stahl and Paul Watson', 'manual'),
+    (master_doc, 'DataFunctionPyLib.tex', 'Data Function PyLib Documentation',
+     'Glysade, LLC', 'manual'),
 ]
 
 
@@ -143,7 +143,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'rusepylib', 'Ruse PyLib Documentation',
+    (master_doc, 'datafunctionpylib', 'Data Function PyLib Documentation',
      [author], 1)
 ]
 
@@ -154,8 +154,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'RusePyLib', 'Ruse PyLib Documentation',
-     author, 'RusePyLib', 'One line description of project.',
+    (master_doc, 'DataFunctionPyLib', 'Data Function PyLib Documentation',
+     author, 'DataFunctionPyLib', 'One line description of project.',
      'Miscellaneous'),
 ]
 

@@ -3,7 +3,7 @@
 log.py
 =======
 
-Copyright (C) 2017 Anodyne Informatics, LLC
+Copyright (C) 2017-2022 Glysade, LLC
 
 Ruse logging module
 """

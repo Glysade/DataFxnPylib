@@ -3,7 +3,7 @@
 rdkit_utils.py
 ===============
 
-Copyright (C) 2017 Anodyne Informatics, LLC
+Copyright (C) 2017-2022 Glysade, LLC
 
 Utility functions for handling chemical structures using RDKit (www.rdkit.org)
 """

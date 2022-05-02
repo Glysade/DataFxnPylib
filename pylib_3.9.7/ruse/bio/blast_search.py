@@ -3,7 +3,7 @@
 blast_search.py
 ===============
 
-Copyright (C) 2017 Anodyne Informatics, LLC
+Copyright (C) 2017-2022 Glysade, LLC
 
 Classes and functions for performing Blast searches against local and NCBI-hosted databases
 """

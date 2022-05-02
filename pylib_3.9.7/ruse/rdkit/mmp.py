@@ -3,7 +3,7 @@
 mmp.py
 ======
 
-Copyright (C) 2018 Anodyne Informatics, LLC
+Copyright (C) 2017-2022 Glysade, LLC
 
 Utility functions and classes for performing MMP analysis
 

@@ -3,7 +3,7 @@
 sequence_align.py
 =================
 
-Copyright (C) 2017 Anodyne Informatics, LLC
+Copyright (C) 2017-2022 Glysade, LLC
 
 A classs to handle multiple sequence alignment (MSA)
 

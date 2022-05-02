@@ -3,7 +3,7 @@
 phylo_tree.py
 =================
 
-Copyright (C) 2017 Anodyne Informatics, LLC
+Copyright (C) 2017-2022 Glysade, LLC
 
 Classes to handle the generation and processing of phylogenetic trees from multiple sequence alignments.
 

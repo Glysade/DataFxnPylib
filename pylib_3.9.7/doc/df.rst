@@ -1,3 +1,4 @@
+.. _core-api:
 
 Data Function Core API
 ======================
@@ -14,9 +15,3 @@ Data Function Core API
 
 .. automodule:: df.bio_helper
    :members:
-
-Indices and tables
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`

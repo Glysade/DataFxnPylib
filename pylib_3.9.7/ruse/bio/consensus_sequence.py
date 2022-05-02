@@ -1,5 +1,5 @@
 """
-Copyright (C) 2019 Anodyne Informatics, LLC
+Copyright (C) 2017-2022 Glysade, LLC
 """
 
 from collections import Counter

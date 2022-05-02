@@ -1,3 +1,4 @@
+.. _getting-started:
 
 Getting Started With Python Data Functions
 ==========================================
@@ -94,7 +95,7 @@ with a second boolean column with rows set to True when a deprotection reaction 
 * Lines 11-14. This function returns True if two molecules are the same using a canonical smiles string comparison
 * Line 21. Deprotects the the input molecules (accounting for null/None values)
 * Line 22. Create values for a boolean column indicating if a molecule has changed (been deproctected)
-* Line 23.  Create an output column of structures for the deprotected molecules using the helper function
+* Line 23. Create an output column of structures for the deprotected molecules using the helper function
   :meth:`~df.chem_helper.molecules_to_column`
 
 DNA Translation Example

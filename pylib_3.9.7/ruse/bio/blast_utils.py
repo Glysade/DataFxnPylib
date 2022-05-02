@@ -3,7 +3,7 @@
 blast-utils.py
 ==============
 
-Copyright (C) 2017 Anodyne Informatics, LLC
+Copyright (C) 2017-2022 Glysade, LLC
 
 A set of utility functions for handing NCBI Blast search and Entrez queries
 """

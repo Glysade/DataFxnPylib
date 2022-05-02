@@ -24,10 +24,3 @@ ruse.util Modules
 
 .. automodule:: ruse.util.util
     :members:
-
-
-Indices and tables
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
