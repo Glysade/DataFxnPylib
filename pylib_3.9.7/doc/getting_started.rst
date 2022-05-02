@@ -135,6 +135,20 @@ Debugging Python Data Functions
 If a data function Python script has been created using the *Developer* tab of the *Charts* *Data Function* visual, it
 is relatively simple to debug and code that data function script using `PyCharm <https://www.jetbrains.com/pycharm/>`_
 
-At the end of the data function development wizard you are prompted to export the data function definition to a folder.
+In the final step of the data function development wizard you are prompted to export the data function definition to a folder.
 After doing this, navigate to the folder and run the *pycharm.bat* file.  Assuming you have installed PyCharm, and
-either *pycharm.cmd* or *pycharm64.exe* are on your path
+either *pycharm.cmd* or *pycharm64.exe* are on your path, PyCharm will open and create a new project in the folder.
+
+Unfortunately, it is not possible to automate adding the Glysade CPython distribution to Pycharm.  If you have already
+defined a python interpreter in PyCharm, the first time
+PyCharm is used to open a data function the correct path to the Glysade Python interpreter must be added as described
+`here <https://www.jetbrains.com/help/pycharm/configuring-python-interpreter.html>`_. The interpreter path is listed
+in the text of the *pycharm.bat* file.
+
+The following files are available in the project:
+
+# *script.py*: the script block from the data function definition
+# *in.json*: example data function JSON input data
+# *main.py*: a script that reads *in.json* calls the data function in *script.py* and writes the result to *out.json*
+# *test.py*: a unit test template
+
