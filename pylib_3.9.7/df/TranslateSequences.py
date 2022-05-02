@@ -21,6 +21,10 @@ def translate(rec: SeqRecord, codon_table_name: str) -> SeqRecord:
 
 
 class TranslateSequences(DataFunction):
+    """
+    Translates DNA in the input column to an output protein column.  If the input column is a protein sequence will
+    create a naive DNA sequence in the output
+    """
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         input_column = next(iter(request.inputColumns.values()))

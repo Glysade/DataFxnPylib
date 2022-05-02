@@ -28,6 +28,9 @@ def search_sequence(rec: SeqRecord, rb: RestrictionBatch) -> SeqRecord:
 
 
 class EnzymeRestriction(DataFunction):
+    """
+    Performs restriction analysis using codes from REBASE
+    """
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         enzyme_names = string_list_input_field(request, 'enzymes')

@@ -9,6 +9,10 @@ from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResp
 
 
 class AbComponentAnalysis(DataFunction):
+    """
+    A data function that creates an analysis of property changes in one part of an antibody while other parts are held
+    constant
+    """
 
     def score_match(self, pair, matrix, gap_mismatch):
         if pair in matrix:
@@ -19,7 +23,6 @@ class AbComponentAnalysis(DataFunction):
             return 1
         else:
             return gap_mismatch
-
 
     def score_pairwise(self, seq1, seq2, matrix, gap_mismatch):
         score = 0
@@ -41,7 +44,6 @@ class AbComponentAnalysis(DataFunction):
 
         return score / len(seq1)
 
-
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         inColumns = request.inputColumns
         seqColumnIds = request.inputFields['sequenceColumns'].data
@@ -57,7 +59,7 @@ class AbComponentAnalysis(DataFunction):
         rhsSeq = []
         seqPair = []
         blosumScore = []
-        dataColumnVals = dict.fromkeys(dataColumnIds,[])
+        dataColumnVals = dict.fromkeys(dataColumnIds, [])
         print(f'dfvs = {dataColumnVals}')
 
         uniqueSeq = {}
@@ -81,8 +83,8 @@ class AbComponentAnalysis(DataFunction):
             rowsSeq = [list(x) for x in zip(*values)]
 
             uniqueColumnSeq = list(uniqueSeq[seqColumnId].keys())
-            for idx1,seq1 in enumerate(uniqueColumnSeq):
-                for idx2,seq2 in enumerate(uniqueColumnSeq):
+            for idx1, seq1 in enumerate(uniqueColumnSeq):
+                for idx2, seq2 in enumerate(uniqueColumnSeq):
                     if idx1 < idx2:
                         seq1Rows = uniqueSeq[seqColumnId][seq1]
                         seq2Rows = uniqueSeq[seqColumnId][seq2]
@@ -95,24 +97,27 @@ class AbComponentAnalysis(DataFunction):
                                     lhsSeq.append(seq1.upper())
                                     rhsSeq.append(seq2.upper())
                                     seqPair.append(f'{seq1.upper()}|{seq2.upper()}')
-                                    blosumScore.append(self.score_pairwise(seq1,seq2, blosum, gapMismatch))
+                                    blosumScore.append(self.score_pairwise(seq1, seq2, blosum, gapMismatch))
 
                                     for dcId in dataColumnIds:
-                                        dataColumnVals[dcId].append(inColumns[dcId].values[ridx1] - inColumns[dcId].values[ridx2])
-
+                                        dataColumnVals[dcId].append(
+                                            inColumns[dcId].values[ridx1] - inColumns[dcId].values[ridx2])
 
         columns = []
         columns.append(ColumnData(name='Source Column', dataType=DataType.STRING, values=src))
         columns.append(ColumnData(name='LHS ID', dataType=inColumns[idColumn].dataType, values=lhsId))
         columns.append(ColumnData(name='RHS ID', dataType=inColumns[idColumn].dataType, values=rhsId))
-        columns.append(ColumnData(name='LHS Sequence', dataType=DataType.STRING, contentType='chemical/x-sequence', values=lhsSeq))
-        columns.append(ColumnData(name='RHS Sequence', dataType=DataType.STRING, contentType='chemical/x-sequence', values=rhsSeq))
-        columns.append(ColumnData(name='Sequence Pair', dataType=DataType.STRING, contentType='chemical/x-sequence-pair', values=seqPair))
+        columns.append(
+            ColumnData(name='LHS Sequence', dataType=DataType.STRING, contentType='chemical/x-sequence', values=lhsSeq))
+        columns.append(
+            ColumnData(name='RHS Sequence', dataType=DataType.STRING, contentType='chemical/x-sequence', values=rhsSeq))
+        columns.append(
+            ColumnData(name='Sequence Pair', dataType=DataType.STRING, contentType='chemical/x-sequence-pair',
+                       values=seqPair))
         columns.append(ColumnData(name='BLOSUM Score', dataType=DataType.DOUBLE, values=blosumScore))
         for id in dataColumnVals:
-            columns.append(ColumnData(name=inColumns[id].name,dataType=inColumns[id].dataType, values=dataColumnVals[id]))
+            columns.append(
+                ColumnData(name=inColumns[id].name, dataType=inColumns[id].dataType, values=dataColumnVals[id]))
 
         response = DataFunctionResponse(outputTables=[TableData(tableName='Ab Analysis Result', columns=columns)])
         return response
-
-

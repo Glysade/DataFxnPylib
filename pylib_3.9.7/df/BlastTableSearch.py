@@ -6,6 +6,10 @@ from ruse.bio.blast_search import BlastCreateAndSearch
 
 
 class BlastTableSearch(DataFunction):
+    """
+    Performs a blast search of the sequences in the provided table using the provided query sequence
+    """
+
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         options = {}
         args = {}

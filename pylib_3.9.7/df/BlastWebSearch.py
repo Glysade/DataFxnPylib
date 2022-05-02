@@ -7,6 +7,10 @@ from ruse.bio.blast_parse import BlastResults, build_common_alignments
 
 
 class BlastWebSearch(DataFunction):
+    """
+    Perform a remote Blast sequence search against an Entrez database
+    """
+
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         args = {}
         query = query_from_request(request)

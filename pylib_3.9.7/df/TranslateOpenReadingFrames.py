@@ -41,6 +41,10 @@ def find_orfs_with_trans(seq: Seq, min_protein_length: int = 50,
 
 
 class TranslateOpenReadingFrames(DataFunction):
+    """
+    Translates DNA from an input column using all open reading frames, and outputs the protein found into a new table
+    """
+
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         sequence_column_id = string_input_field(request, 'sequenceColumn')
         id_column_id = string_input_field(request, 'idColumn')
@@ -68,9 +72,9 @@ class TranslateOpenReadingFrames(DataFunction):
                 sequence.append(SeqRecord(pro))
                 strands.append('+' if strand == 1 else '-')
                 length.append(len(pro))
-                starts.append(start+1)
-                ends.append(end+1)
-                frames.append(frame+1)
+                starts.append(start + 1)
+                ends.append(end + 1)
+                frames.append(frame + 1)
 
         protein_column = sequences_to_column(sequence, 'Protein', genbank_output=False)
         output_columns = [

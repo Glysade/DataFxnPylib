@@ -12,7 +12,7 @@ from ruse.rdkit.rdkit_utils import sanitize_mol
 
 class ReactionTableSearch(DataFunction):
     """
-    A data function that performs reaction pair finding
+    Finds reactant and product pairs in the input columns using a reaction. The reaction must include atom maps.
     """
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:

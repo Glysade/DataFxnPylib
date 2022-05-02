@@ -104,6 +104,10 @@ def search_mmpdb(request: DataFunctionRequest, property_names: list[str],
 
 
 class MmpdbDatabaseSearch(DataFunction):
+    """
+    Finds MMP transformations and associated property predictions for a query structure
+    """
+
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         mmpdb_database_file = string_input_field(request, 'mmpdbDatabasePath')
 

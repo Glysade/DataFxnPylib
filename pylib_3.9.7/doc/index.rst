@@ -11,16 +11,17 @@ Welcome to Glysade's Data Function PyLib's API
 Documentation for building Glysade Python Data Functions for Spotfire
 
 .. toctree::
+   :maxdepth: 4
+   :caption: Getting started and core API:
 
    getting_started
-
+   df
 
 .. toctree::
    :maxdepth: 4
-   :caption: Python API:
+   :caption: Builtin data functions and supporting code:
 
    df_modules
-   df
    bio
    chem
    rdkit

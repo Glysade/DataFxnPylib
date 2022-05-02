@@ -31,8 +31,8 @@ class DataType(Enum):
     Members:
        * BOOLEAN: Spotfire boolean data type, associated value should be Python bool
        * STRING: Spotfire string data type, Python str
-       * BINARY: Spotfire binary data type, associated value will be the result of gzipping then Base64 encoding the
-         original raw value.  Python str.
+       * BINARY: Spotfire binary data type, Python str value is the result of gzipping then Base64 encoding the
+         original raw value.
        * INTEGER: integer data type, equivalent to Spotfire 32 bit integer column type (Integer). Python int.
          Since Python ints may be 64 bit numbers use this as a return type with care.
        * LONG: long data type, equivalent to Spotfire 64 bit integer column type (LongInteger).  Python int.

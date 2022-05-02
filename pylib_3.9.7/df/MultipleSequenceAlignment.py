@@ -9,6 +9,10 @@ from ruse.bio.sequence_align import SequenceAlignmentMethod
 
 
 class MultipleSequenceAlignment(DataFunction):
+    """
+    Performs multiple sequence alignment using a variety of algorithms on an input column
+    """
+
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         input_column = next(iter(request.inputColumns.values()))
         input_column.remove_nulls()
@@ -28,7 +32,8 @@ class MultipleSequenceAlignment(DataFunction):
 
         id_values = [s.id if s else None for s in output_sequences]
         tree = PhyloTree(msa.tree)
-        id_column = ColumnData(name='Dendrogram', dataType=DataType.STRING, properties={'tree': json.dumps(tree.data_tree)},
+        id_column = ColumnData(name='Dendrogram', dataType=DataType.STRING,
+                               properties={'tree': json.dumps(tree.data_tree)},
                                values=id_values)
 
         size = len(input_column.values)

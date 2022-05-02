@@ -12,6 +12,9 @@ from ruse.bio.igblast_parse import parse_igblastn_results
 
 
 class IgBlastnLocalTextSearch(DataFunction):
+    """
+    Analyze immunoglobulin (Ig) sequences using Igblastn
+    """
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         query_sequence = query_from_request(request)

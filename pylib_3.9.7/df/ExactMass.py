@@ -6,6 +6,10 @@ from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResp
 
 
 class ExactMass(DataFunction):
+    """
+    Calculates the exact mass for a column of structures
+    """
+
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         column_id = string_input_field(request, 'structureColumn')
         input_column = request.inputColumns[column_id]

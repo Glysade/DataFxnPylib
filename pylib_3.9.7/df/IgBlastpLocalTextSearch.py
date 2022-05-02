@@ -51,6 +51,9 @@ def process_ig_search_results(query_sequence: SeqRecord, results: IgResult, tabl
 
 
 class IgBlastpLocalTextSearch(DataFunction):
+    """
+    Analyze immunoglobulin (Ig) sequences using Igblastp
+    """
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         query_sequence = query_from_request(request)

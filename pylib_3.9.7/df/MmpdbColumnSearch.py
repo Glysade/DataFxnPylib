@@ -142,6 +142,12 @@ def generate_mmpdb_dir(request: DataFunctionRequest) -> str:
 
 
 class MmpdbColumnSearch(DataFunction):
+    """
+    Finds MMP transformations and associated property predictions for a query structure
+    The MMP database is created from input structure and property columns.  The MMPDB database is cached and only
+    remade if the input changes
+    """
+
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         mmpdb_dir = generate_mmpdb_dir(request)
         settings = build_mmp_database(mmpdb_dir, request)

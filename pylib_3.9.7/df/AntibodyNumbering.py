@@ -8,6 +8,10 @@ from ruse.bio.bio_data_table_helper import sequence_to_genbank_base64_str
 
 
 class AntibodyNumbering(DataFunction):
+    """
+    Identifies antibody chain numbering and aligns chains
+    """
+
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         input_column = next(iter(request.inputColumns.values()))
         input_column.remove_nulls()

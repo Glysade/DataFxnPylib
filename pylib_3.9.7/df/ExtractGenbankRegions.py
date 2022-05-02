@@ -36,6 +36,9 @@ def _extract_region(sequence: Optional[SeqRecord], feature_key: str, feature_qua
 
 
 class ExtractGenbankRegions(DataFunction):
+    """
+    Extracts all regions matching a feature key and qualifier from a column of genbank sequences into new columns
+    """
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         input_column = next(iter(request.inputColumns.values()))

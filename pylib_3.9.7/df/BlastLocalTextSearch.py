@@ -143,6 +143,9 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest, o
 
 
 class BlastLocalTextSearch(DataFunction):
+    """
+    Performs a BLAST search of user selected databases using a query entered as text
+    """
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         query_sequence = query_from_request(request)

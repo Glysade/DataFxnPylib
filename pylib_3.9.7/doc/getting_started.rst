@@ -129,8 +129,8 @@ BioPython.
 * Line 11. Create an output column for the protein sequences using the helper function
   :meth:`~df.bio_helper.sequences_to_column`
 
-Debugging Python Data Functions
-*******************************
+Debugging and Developing Python Data Functions
+**********************************************
 
 If a data function Python script has been created using the *Developer* tab of the *Charts* *Data Function* visual, it
 is relatively simple to debug and code that data function script using `PyCharm <https://www.jetbrains.com/pycharm/>`_
@@ -140,15 +140,31 @@ After doing this, navigate to the folder and run the *pycharm.bat* file.  Assumi
 either *pycharm.cmd* or *pycharm64.exe* are on your path, PyCharm will open and create a new project in the folder.
 
 Unfortunately, it is not possible to automate adding the Glysade CPython distribution to Pycharm.  If you have already
-defined a python interpreter in PyCharm, the first time
-PyCharm is used to open a data function the correct path to the Glysade Python interpreter must be added as described
+defined a python interpreter in PyCharm, the first time PyCharm is used to open a data function the correct path to the
+Glysade Python interpreter must be added as described
 `here <https://www.jetbrains.com/help/pycharm/configuring-python-interpreter.html>`_. The interpreter path is listed
 in the text of the *pycharm.bat* file.
 
 The following files are available in the project:
 
-# *script.py*: the script block from the data function definition
-# *in.json*: example data function JSON input data
-# *main.py*: a script that reads *in.json* calls the data function in *script.py* and writes the result to *out.json*
-# *test.py*: a unit test template
+#. *script.py*: the script block from the data function definition
+#. *in.json*: example data function JSON input data
+#. *main.py*: a script that reads *in.json* calls the data function in *script.py* and writes the result to *out.json*
+#. *test.py*: a unit test template
+#. *command.bat*: a batch file that run *main.py* with the correct environment and Python interpreter.
+   Once in production it is this script that runs the data function
+
+One the data function is working satisfactorily, to create the required data function YAML, the contents of *script.py*
+can be pasted into the script dialog in the *Developer* tab of the *Charts* *Data Function* visual.
+
+Fixing Broken Data Functions
+****************************
+
+When a Python data function fails to run, an error message is posted as a Spotfire notification.  The error message will
+contain the path of the data function job directory.
+
+The job directory contains the files listed in `Debugging and Developing Python Data Functions`_. *Command.bat* may be
+run to reproduce the data function error and *script.py* can be edited to resolve the error.  Once the script is fixed
+the data function definition YAML can be updated.
+
 

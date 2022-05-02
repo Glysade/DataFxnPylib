@@ -6,6 +6,9 @@ from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResp
 
 
 class BlastLocalColumnSearch(DataFunction):
+    """
+    Performs a BLAST search of user selected databases using queries from a sequence column
+    """
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         sequence_column_id = string_input_field(request, 'sequenceColumn')

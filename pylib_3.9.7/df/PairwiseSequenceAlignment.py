@@ -8,6 +8,9 @@ from ruse.bio.pairwise_alignment import PairwiseAlignmentMethod, needle_pairwise
 
 
 class PairwiseSequenceAlignment(DataFunction):
+    """
+    Pairwise sequence alignment service, aligning sequences in an input column to a query sequence
+    """
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         input_column = next(iter(request.inputColumns.values()))
