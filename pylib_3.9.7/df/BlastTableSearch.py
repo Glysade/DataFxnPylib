@@ -70,6 +70,6 @@ class BlastTableSearch(DataFunction):
             multiple_alignments = build_common_alignments(query, hits_in_order)
             multiple_alignment_column = sequences_to_column(multiple_alignments[1:], 'Aligned Sequence', True)
             multiple_alignment_column.insert_nulls(null_positions)
-            columns.insert(0, multiple_alignment_column)
+            columns.append(multiple_alignment_column)
         response = DataFunctionResponse(outputColumns=columns)
         return response
