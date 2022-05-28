@@ -2,6 +2,7 @@ from typing import List, Dict, Optional, Union, Tuple
 
 from rdkit import Chem
 from rdkit.Chem import AllChem
+from rdkit.Chem.rdChemReactions import ChemicalReaction
 from rdkit.Chem.rdchem import Mol
 
 from df.chem_helper import column_to_molecules, molecules_to_column
@@ -34,20 +35,36 @@ class ReactionTableSearch(DataFunction):
                 ds.append(diff)
             return froms, tos, ds
 
+        def mol_to_smiles(mol: Mol) -> Optional[str]:
+            try:
+                mol = Chem.RemoveHs(mol)
+                smiles = Chem.MolToSmiles(mol)
+                return smiles
+            except:
+                return None
+
         rxn_field = request.inputFields['reactionQuery']
         rxn_text = str(rxn_field.data)
         rxn_content_type = rxn_field.contentType
-        if rxn_content_type in ['chemical/x-smiles', 'chemical/x-smarts']:
-            if '>>' not in rxn_text:
-                raise ValueError(f'Input {rxn_text} is not a reaction smarts')
-            rxn = AllChem.ReactionFromSmarts(rxn_text)
-        elif rxn_content_type in ['chemical/x-mdl-molfile', 'chemical/x-mdl-molfile-v3000', 'chemical/x-mdl-rxnfile']:
-            if '$RXN' not in rxn_text:
-                raise ValueError(f'Input is not a RXN block: {rxn_text}')
-            rxn = AllChem.ReactionFromRxnBlock(rxn_text)
-        else:
-            raise ValueError(f'Unable to convert content type {rxn_content_type} to reaction')
-        AllChem.SanitizeRxn(rxn)
+        rxn: ChemicalReaction
+        try:
+            if rxn_content_type in ['chemical/x-smiles', 'chemical/x-smarts']:
+                if '>>' not in rxn_text:
+                    raise ValueError(f'Input {rxn_text} is not a reaction smarts')
+                rxn = AllChem.ReactionFromSmarts(rxn_text)
+            elif rxn_content_type in ['chemical/x-mdl-molfile', 'chemical/x-mdl-molfile-v3000', 'chemical/x-mdl-rxnfile']:
+                if '$RXN' not in rxn_text:
+                    raise ValueError(f'Input is not a RXN block: {rxn_text}')
+                rxn = AllChem.ReactionFromRxnBlock(rxn_text)
+            else:
+                raise ValueError(f'Unable to convert content type {rxn_content_type} to reaction')
+        except:
+            raise ValueError(f'Unable to convert content type {rxn_content_type} value {rxn_text} to reaction')
+
+        try:
+            AllChem.SanitizeRxn(rxn)
+        except:
+            pass
         if rxn.GetNumProductTemplates() != 1:
             raise ValueError('Number of products in reaction is not one')
         if rxn.GetNumReactantTemplates() != 1:
@@ -59,7 +76,7 @@ class ReactionTableSearch(DataFunction):
         id_column = request.inputColumns[id_column_id]
         ids: List[Union[str, int]] = id_column.values
         property_column_ids = string_list_input_field(request, 'propertyColumns')
-        structure_to_row: Dict[str, int] = {Chem.MolToSmiles(mol): r for r, mol in enumerate(structures) if mol}
+        structure_to_row: Dict[str, int] = {mol_to_smiles(mol): r for r, mol in enumerate(structures) if mol}
         properties = [request.inputColumns[column_id].values for column_id in property_column_ids]
         property_names = ['_'.join(request.inputColumns[column_id].name.split()) for column_id in property_column_ids]
 
@@ -82,12 +99,21 @@ class ReactionTableSearch(DataFunction):
             from_id = ids[row]
             if from_id is None:
                 continue
-            product_list = rxn.RunReactants([structure])
+            product_list = None
+            try:
+                product_list = rxn.RunReactants([structure])
+            except:
+                if not product_list:
+                    continue
             for products in product_list:
                 assert len(products) == 1
                 product: Mol = products[0]
                 sanitize_mol(product)
-                product_smiles = Chem.MolToSmiles(product)
+                try:
+                    product = Chem.RemoveHs(product)
+                    product_smiles = Chem.MolToSmiles(product)
+                except:
+                    break
                 if product_smiles in structure_to_row:
                     other_row = structure_to_row[product_smiles]
                     to_id = ids[other_row]
