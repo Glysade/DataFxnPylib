@@ -12,7 +12,6 @@ import uuid
 
 from typing import List, Dict, Union, Tuple, Optional
 
-import ruse.util.ruse_resource
 from ruse.util.frozen import Frozen
 # Types for Data Tables- need to adhere to this for DataTableType and ColumnInfo structures
 # or Spotfire won't be able to read.
@@ -208,20 +207,6 @@ class DataTable(Frozen):
         :return: the content type for the column
         """
         return self.columns[column_idx]['properties']['ContentType']
-
-    # importing RuseResource will create a circular reference
-    def create_from_resource(self, resource: 'ruse.util.ruse_resource.RuseResource') -> None:
-        """
-        Initializes data table contents for a resource.  The data table will comprise one cell containing the resource id
-
-        :param resource: ruse resource as :class:`ruse.util.ruse_resource.RuseResource`
-        """
-
-        assert self.data == []
-        assert self.columns == []
-
-        self.data = [[resource.resource_id]]
-        self.columns.append(self.column_definition('Resource ID', 'int', 'ruse/x-resource'))
 
     def to_json(self) -> JsonType:
         """

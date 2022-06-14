@@ -85,59 +85,6 @@ def find_on_path(alternatives: List[str]) -> str:
     raise ValueError("Unable to find any of {} on path!".format(alternatives))
 
 
-def ruse_server() -> str:
-    """
-    :return: A (string) url to the ruse server
-    """
-
-    ruse_url = os.environ['RUSE_SERVER'] if 'RUSE_SERVER' in os.environ else 'http://localhost:9000'
-    return ruse_url
-
-
-def ruse_public_server() -> str:
-    """
-    :return: A (string) url to the ruse server
-    """
-
-    ruse_url = os.environ['RUSE_PUBLIC_SERVER'] if 'RUSE_PUBLIC_SERVER' in os.environ else 'http://localhost:9000'
-    return ruse_url
-
-
-def ruse_work_dir() -> str:
-    """
-    :return: full path to the svcrunner work directory
-    """
-
-    return os.environ['WorkDirPath'] if 'WorkDirPath' in os.environ \
-        else os.path.join(os.path.dirname(__file__),
-                          os.path.normpath(
-                              '../../../ruse_docker/docker_files/ruse/master/files'))
-
-
-def ruse_server_present() -> bool:
-    """
-    :return: True if the ruse server is present
-    """
-    try:
-        response = requests.get(ruse_server() + '/tasks')
-        return response.status_code in [requests.codes.ok, requests.codes.see_other]
-    except requests.ConnectionError:
-        return False
-
-
-def run_external_process(exes: List[str], args: List[str]) -> int:
-    """
-    A helper method to run an external process.  See :class:`ruse.util.run_external_process.RunExternalProcess`
-
-    :param exes: A list of possible alternative executable names
-    :param args: program arguments
-    :return: program exit code
-    """
-    from ruse.util.run_external_process import RunExternalProcess
-    process = RunExternalProcess()
-    return process.run_external_process(exes, args)
-
-
 # don't import type for getter- creates circular references
 #  full signature causes error in Sphnix
 # def getter(json_obj: 'ruse.util.util.data_table.JsonType', key: str):
