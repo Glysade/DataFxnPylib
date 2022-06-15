@@ -13,6 +13,7 @@ from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResp
 def find_orfs_with_trans(seq: Seq, min_protein_length: int = 50,
                          trans_table: str = 'Standard') -> List[Tuple[int, int, int, Seq, int]]:
     answer = []
+    seq = seq.ungap()
     seq_len = len(seq)
     for strand, nuc in [(+1, seq), (-1, seq.reverse_complement())]:
         for frame in range(3):
