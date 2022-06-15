@@ -17,7 +17,7 @@ import gzip
 import re
 import uuid
 
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from Bio import SeqIO
 from Bio.Seq import Seq
@@ -81,7 +81,7 @@ def genbank_base64_str_to_sequence(data: str, row_index: int) -> SeqRecord:
     raise UnicodeDecodeError("Unable to decode genbank cell")
 
 
-def sequence_to_genbank_base64_str(record: SeqRecord) -> str:
+def sequence_to_genbank_base64_str(record: Optional[SeqRecord]) -> str:
     """
     Converts a Biopython sequence record to an encoded string.  The sequenced is converted to a Genbank format string,
     then gzipped and encoded in Base64(utf8)
@@ -89,7 +89,8 @@ def sequence_to_genbank_base64_str(record: SeqRecord) -> str:
     :param record: Sequence as :class:`Bio.SeqRecord.SeqRecord`
     :return: Encoded string
     """
-
+    if not record:
+        return None
     seq = record.seq
     # these 2 checks are to make sure we can write records read from fasta into genbank format
     if 'molecule_type' not in record.annotations:
