@@ -100,8 +100,13 @@ class AbComponentAnalysis(DataFunction):
                                     blosumScore.append(self.score_pairwise(seq1, seq2, blosum, gapMismatch))
 
                                     for dcId in dataColumnIds:
-                                        dataColumnVals[dcId].append(
-                                            inColumns[dcId].values[ridx1] - inColumns[dcId].values[ridx2])
+                                        data1 = inColumns[dcId].values[ridx1]
+                                        data2 = inColumns[dcId].values[ridx2]
+                                        if data1 is not None and data2 is not None:
+                                            dataColumnVals[dcId].append(
+                                                inColumns[dcId].values[ridx1] - inColumns[dcId].values[ridx2])
+                                        else:
+                                            dataColumnVals[dcId].append(None)
 
         columns = []
         columns.append(ColumnData(name='Source Column', dataType=DataType.STRING, values=src))
