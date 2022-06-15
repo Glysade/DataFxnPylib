@@ -73,6 +73,7 @@ class ExtractGenbankRegions(DataFunction):
             feature_sequences = [_extract_region(s, feature_key, feature_qualifier, region_name) for s in
                                  input_sequences]
             output_column = sequences_to_column(feature_sequences, f'{input_column.name} {region_name}', False)
+            output_column.insert_nulls(input_column.missing_null_positions)
             output_columns.append(output_column)
         response = DataFunctionResponse(outputColumns=output_columns)
         return response
