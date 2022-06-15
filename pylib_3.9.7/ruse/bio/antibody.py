@@ -99,7 +99,7 @@ class ChainRegions(NamedTuple):
 
 
 class AntibodyAlignmentResult(NamedTuple):
-    aligned_sequences: List[SeqRecord]
+    aligned_sequences: Optional[List[SeqRecord]]
     numbering: List[AntibodyNumber]
     regions: List[ChainRegions]
     numbering_scheme: str
@@ -210,11 +210,16 @@ def _do_align_antibody_sequences(sequences: List[SeqRecord],
                  zip(labelling_positions, labellings)]
     regions = _find_all_regions(numbering, numbering_scheme, cdr_definition)
 
+    for index, m in enumerate(mapping):
+        if not m:
+            aligned_records[index] = None
     return AntibodyAlignmentResult(aligned_records, numbering, regions, numbering_scheme, cdr_definition)
 
 
-def _find_in_mapping(mapping: List[AntibodyNumberMapping], position: AntibodyNumber, input_position: int) -> Optional[
-    AntibodyNumberMapping]:
+def _find_in_mapping(mapping: Optional[List[AntibodyNumberMapping]], position: AntibodyNumber, input_position: int) -> \
+Optional[AntibodyNumberMapping]:
+    if not mapping:
+        return None
     for m in mapping:
         if m.query_position is None:
             continue
@@ -234,7 +239,8 @@ class AnarciDomain(NamedTuple):
     numbers: List[AntibodyNumberMapping]
 
 
-def _create_antibody_mappings(sequences: List[SeqRecord], numbering_scheme: str) -> List[List[AntibodyNumberMapping]]:
+def _create_antibody_mappings(sequences: List[SeqRecord], numbering_scheme: str) -> List[
+    List[AntibodyNumberMapping]]:
     base = str(uuid.uuid4())
     in_file = 'seq_in_{}.fasta'.format(base)
     out_file = 'anarci_numbering_{}.txt'.format(base)
@@ -289,6 +295,8 @@ def _create_antibody_mappings(sequences: List[SeqRecord], numbering_scheme: str)
 
     assert len(mappings) == len(sequences)
     for mapping, record in zip(mappings, sequences):
+        if not mapping:
+            continue
         for domain in mapping:
             mapping_seq_arr = [m.residue for m in domain.numbers if m.residue != '-']
             mapping_seq = ''.join(mapping_seq_arr)
