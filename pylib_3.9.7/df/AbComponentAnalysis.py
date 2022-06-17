@@ -59,7 +59,7 @@ class AbComponentAnalysis(DataFunction):
         rhsSeq = []
         seqPair = []
         blosumScore = []
-        dataColumnVals = dict.fromkeys(dataColumnIds, [])
+        dataColumnVals = {dataColumnId: [] for dataColumnId in dataColumnIds}
         print(f'dfvs = {dataColumnVals}')
 
         uniqueSeq = {}
@@ -104,7 +104,7 @@ class AbComponentAnalysis(DataFunction):
                                         data2 = inColumns[dcId].values[ridx2]
                                         if data1 is not None and data2 is not None:
                                             dataColumnVals[dcId].append(
-                                                inColumns[dcId].values[ridx1] - inColumns[dcId].values[ridx2])
+                                                data1 - data2)
                                         else:
                                             dataColumnVals[dcId].append(None)
 
