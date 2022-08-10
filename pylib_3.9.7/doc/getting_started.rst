@@ -19,6 +19,19 @@ script to be run is specified in the **script** tag. The Python script should de
 a :class:`~df.data_transfer.DataFunctionRequest` as an argument and returns a
 :class:`~df.data_transfer.DataFunctionResponse` object.
 
+
+Data Function Databases
+***********************
+
+Many of the data functions defined in the definition YAML require local resources such as
+Blast, IGBlast and MMP databases.  These example databases may be downloaded as a ZIP archive from
+`Dropbox <https://www.dropbox.com/s/82zqkp9kuaxbl4u/chemcharts_db.zip>`_.
+The ZIP archive should be expanded in the root of
+the C:\ drive.
+
+.. image:: chemcharts_db.png
+   :scale: 50%
+
 Exact Mass Example
 ******************
 
