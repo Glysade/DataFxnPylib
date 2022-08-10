@@ -27,7 +27,7 @@ Many of the data functions defined in the definition YAML require local resource
 Blast, IGBlast and MMP databases.  These example databases may be downloaded as a ZIP archive from
 `Dropbox <https://www.dropbox.com/s/82zqkp9kuaxbl4u/chemcharts_db.zip>`_.
 The ZIP archive should be expanded in the root of
-the C:\ drive.
+the C:\\ drive.
 
 .. image:: chemcharts_db.png
    :scale: 50%
