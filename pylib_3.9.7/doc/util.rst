@@ -19,8 +19,5 @@ ruse.util Modules
     :special-members:
     :private-members:
 
-.. automodule:: ruse.util.ruse_resource
-    :members:
-
 .. automodule:: ruse.util.util
     :members:
