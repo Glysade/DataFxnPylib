@@ -260,7 +260,7 @@ def string_input_field(request: DataFunctionRequest, field: str, default_value: 
     :return:
     """
     data = _input_field_value(request, field)
-    if not data:
+    if data is None:
         return default_value
     _check_data_type(request, field, DataType.STRING)
     return data
@@ -276,7 +276,7 @@ def integer_input_field(request: DataFunctionRequest, field: str, default_value:
     :return:
     """
     data = _input_field_value(request, field)
-    if not data:
+    if data is None:
         return default_value
     _check_data_types(request, field, [DataType.LONG, DataType.INTEGER])
     return data
@@ -293,7 +293,7 @@ def boolean_input_field(request: DataFunctionRequest, field: str, default_value:
     :return:
     """
     data = _input_field_value(request, field)
-    if not data:
+    if data is None:
         return default_value
     _check_data_type(request, field, DataType.BOOLEAN)
     return data
@@ -310,7 +310,7 @@ def double_input_field(request: DataFunctionRequest, field: str, default_value: 
     :return:
     """
     data = _input_field_value(request, field)
-    if not data:
+    if data is None:
         return default_value
     _check_data_types(request, field, [DataType.DOUBLE, DataType.FLOAT])
     return data
@@ -326,7 +326,7 @@ def binary_input_field(request: DataFunctionRequest, field: str, default_value: 
     :return:
     """
     data = _input_field_value(request, field)
-    if not data:
+    if data is None:
         return default_value
     _check_data_type(request, field, DataType.BINARY)
     return data
@@ -343,7 +343,7 @@ def string_list_input_field(request: DataFunctionRequest, field: str, default_va
     :return:
     """
     data = _input_field_value(request, field)
-    if not data:
+    if data is None:
         return default_value
     _check_data_type(request, field, DataType.STRING_LIST)
     return data
