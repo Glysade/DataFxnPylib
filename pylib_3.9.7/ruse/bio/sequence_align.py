@@ -124,8 +124,7 @@ class MultipleSequenceAlignment(Frozen):
                 if os.name == 'nt':
                     muscle_exe = 'muscle3.8.31_i86win32.exe'
                 elif os.name == 'posix':
-                    muscle_exe = os.path.abspath(
-                        os.path.join(os.path.dirname(__file__), "../../bin/linux_bin/muscle"))
+                    muscle_exe = 'muscle'
                 else:
                     raise RuntimeError("Unable to determine muscle exe for os {}".format(os.name))
                 # tree2 to save newick guide tree after 2nd iteration, stable to have output order match input order

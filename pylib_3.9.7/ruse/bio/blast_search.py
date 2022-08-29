@@ -40,23 +40,12 @@ def full_path_to_blast_exe(exe: str) -> str:
         if not exe.lower().endswith('.exe'):
             exe += '.exe'
         return exe
-        # TODO remove this block once data functions are working
-        exe = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), base, "win_bin", "ncbi-blast-{}".format(ncbi_blast_version),
-                         "bin", exe))
-        print("blast exe is {}".format(exe))
-        if not os.path.isfile(exe):
-            raise ValueError
-        return exe
     elif os.name == 'posix':
-        exe = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), base, "linux_bin", "ncbi-blast-{}".format(ncbi_blast_version),
-                         "bin", exe))
-        print("blast exe is {}".format(exe))
-        if not os.path.isfile(exe):
-            raise ValueError
+        if exe.lower().endswith('.exe'):
+            exe = exe[:-4]
         return exe
-    raise RuntimeError("Unable to determine blast executable for program {} on os {}".format(exe, os.name))
+    else:
+        raise ValueError(f'Unknown OS {os.name}')
 
 
 class BlastDatabase(Frozen):

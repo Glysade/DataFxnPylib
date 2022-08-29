@@ -103,20 +103,10 @@ class PhyloTreeBuilder(Frozen):
         base = os.path.normpath("../../bin")
         if os.name == 'nt':
             return 'FastTree.exe'
-            # TODO remove once everything seems to be working
-            exe = os.path.abspath(
-                os.path.join(os.path.dirname(__file__), base, "win_bin", "FastTree.exe"))
         elif os.name == 'posix':
-            exe = os.path.abspath(
-                os.path.join(os.path.dirname(__file__), base, "linux_bin", "FastTreeDbl"))
+            return 'FastTreeDbl'
         else:
             return None
-
-        if os.path.isfile(exe) and is_exe(exe):
-            return exe
-
-        print("Not using fasttree: file {} is not present or not executable!".format(exe))
-        return None
 
     def build_fasttree_tree(self, input_aln_file: str) -> Tree:
         """
