@@ -20,6 +20,7 @@ _static/
 # test output
 output/
 # test folder
+test_pylib/
 test/
 
 # misc
