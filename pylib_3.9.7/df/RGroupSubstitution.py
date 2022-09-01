@@ -293,7 +293,6 @@ def replace_rgroups(mols: list[Chem.Mol], core_query: Chem.Mol,
     parent_col = molecules_to_column(final_parents, f'Parents {input_column_name}', DataType.BINARY)
     analogue_col = molecules_to_column(final_analogues, 'Analogues', DataType.BINARY)
     return TableData(tableName=table_name, columns=[parent_col, analogue_col])
-    return TableData(tableName=table_name, columns=[parent_col, analogue_col])
 
 
 class RGroupSubstitution(DataFunction):
@@ -311,5 +310,5 @@ class RGroupSubstitution(DataFunction):
         use_layer2 = boolean_input_field(request, 'useLayer2')
         analogues_table = replace_rgroups(mols, core_query, use_layer1,
                                           use_layer2, input_column)
-        response = DataFunctionResponse(outputTable=[analogues_table])
+        response = DataFunctionResponse(outputTables=[analogues_table])
         return response
