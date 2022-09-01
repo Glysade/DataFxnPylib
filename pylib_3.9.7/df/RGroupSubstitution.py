@@ -282,11 +282,10 @@ def replace_rgroups(mols: list[Chem.Mol], core_query: Chem.Mol,
     for analogue, parent in zip(all_analogues, analogue_parents):
         smi = Chem.MolToSmiles(analogue)
         if not analogue_smiles[smi]:
-            align_analogue_to_parent(analogue, parent)
+            # align_analogue_to_parent(analogue, parent)
             final_analogues.append(analogue)
             rdDepictor.Compute2DCoords(analogue)
             final_parents.append(parent)
-
         analogue_smiles[smi] += 1
 
     table_name = f'Analogues of {input_column_name}'
