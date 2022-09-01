@@ -291,7 +291,7 @@ def replace_rgroups(mols: list[Chem.Mol], core_query: Chem.Mol,
     table_name = f'Analogues of {input_column_name}'
     parent_col = molecules_to_column(final_parents, f'Parents {input_column_name}', DataType.BINARY)
     analogue_col = molecules_to_column(final_analogues, 'Analogues', DataType.BINARY)
-    return TableData(tableName=table_name, columns=[parent_col])
+    return TableData(tableName=table_name, columns=[analogue_col])
 
 
 class RGroupSubstitution(DataFunction):
