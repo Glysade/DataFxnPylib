@@ -2,14 +2,14 @@ import re
 from collections import defaultdict
 from itertools import product
 from json import load
-from pathlib import Path
 
 from rdkit import Chem
 from rdkit.Chem import rdDepictor, rdMolAlign
 
 from df.chem_helper import column_to_molecules, input_field_to_molecule, \
     molecules_to_column
-from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResponse, DataType, \
+from df.data_transfer import DataFunction, DataFunctionRequest, \
+    DataFunctionResponse, DataType, \
     TableData, boolean_input_field, string_input_field
 
 
@@ -20,13 +20,10 @@ def load_substitutions_data() -> dict[str: tuple[list[str], list[str]]]:
     with the lists of SMILES of first and second layer substitutions.
     :return:
     """
-    im_here = Path(__file__)
-    substs_file = im_here.parent.parent.parent / 'Data' / 'top500_R_replacements.json'
+    substs_file = 'top500_R_replacements.json'
     with open(substs_file, 'r') as f:
         raw_substs_data = load(f)
 
-    print(f'read {len(raw_substs_data)} subst records')
-    # print(dumps(raw_substs_data[0], indent=4))
     # it's a lot more convenient in use if the outer list is turned
     # into a dict.
     substs_data = {}
@@ -78,7 +75,6 @@ def make_core_and_rgroups(mol: Chem.Mol, core_query: Chem.Mol) -> list[tuple[Che
     for match in matches:
         # take a copy so temporary markings aren't propogated
         mol_cp = Chem.Mol(mol)
-        print(match)
         bonds_to_go = []
         dummy_labels = []
         for match_at in match:
@@ -86,26 +82,19 @@ def make_core_and_rgroups(mol: Chem.Mol, core_query: Chem.Mol) -> list[tuple[Che
             at.SetProp('_GL_CORE_', f'{match_at}')
             for bond in mol_cp.GetAtomWithIdx(match_at).GetBonds():
                 other_atom = bond.GetOtherAtomIdx(match_at)
-                # print(f'{match_at} :: {bond.GetIdx()} : '
-                #       f'{bond.GetBeginAtomIdx()}-> {bond.GetEndAtomIdx()} : '
-                #       f'{other_atom}')
                 if other_atom not in match:
                     btg_num = len(bonds_to_go)
                     dummy_labels.append((btg_num + 1001, btg_num + 1001))
                     bonds_to_go.append(bond.GetIdx())
-        print(f'bonds_to_go : {bonds_to_go}')
-        print(f'dummy_labels : {dummy_labels}')
         frag_mol = Chem.FragmentOnBonds(mol_cp, bonds_to_go,
                                         dummyLabels=dummy_labels)
         # the fragmentation labels the dummy atoms at the break points
         # with isotope numbers.  Convert these to atom map numbers so
         # that molzip can be used
         for atom in frag_mol.GetAtoms():
-            # print(f'{atom.GetIdx()} : {atom.GetAtomicNum()} : {atom.GetIsotope()}')
             if atom.GetIsotope() > 1000:
                 atom.SetAtomMapNum(atom.GetIsotope())
                 atom.SetIsotope(0)
-        print(f'fragmented mol : {Chem.MolToSmiles(frag_mol)}')
         frags = Chem.GetMolFrags(frag_mol, asMols=True)
         frag_core = None
         r_group_smis = []
@@ -129,7 +118,6 @@ def make_core_and_rgroups(mol: Chem.Mol, core_query: Chem.Mol) -> list[tuple[Che
             for bid in bidentates:
                 frag_core = Chem.CombineMols(frag_core, bid)
             frag_core = Chem.molzip(frag_core)
-        print(f'finals : {Chem.MolToSmiles(frag_core)} : {" ".join(r_group_smis)}')
         ret_mols.append((frag_core, r_group_smis))
     return ret_mols
 
@@ -222,38 +210,18 @@ def make_analogues(core_and_rgroups: list[tuple[Chem.Mol, list[str]]],
     """
     analogues = []
     for core, rgroups in core_and_rgroups:
-        print('NEXT CORE : ')
-        for at in core.GetAtoms():
-            try:
-                print(f'{at.GetIdx()} -> {at.GetProp("_GL_CORE_")} ', end='')
-            except KeyError:
-                pass
-        print()
         rgroup_repls = []
         for rgroup in rgroups:
             rgroup_lookup, atom_map_num = make_rgroup_lookup_smi(rgroup)
-            print(rgroup, rgroup_lookup, atom_map_num)
             layer1_mols, layer2_mols = \
                 make_rgroups_for_substs(rgroup_lookup, atom_map_num,
                                         substs_data, use_layer1, use_layer2)
             rgroup_repls.append(layer1_mols + layer2_mols)
-            print(f'layer 1 : {layer1_mols}')
-            print(f'layer 2 : {layer2_mols}')
-        print(f'rgroup_repls : {rgroup_repls}')
         for substs in product(*rgroup_repls):
-            print(f'next substs for: {Chem.MolToSmiles(core)} :: ', end='')
             analogue = Chem.Mol(core)
             for s in substs:
                 analogue = Chem.CombineMols(analogue, s)
-                print(f'{Chem.MolToSmiles(s)} ', end='')
             analogue = Chem.molzip(analogue)
-            print(f'  gives {Chem.MolToSmiles(analogue)}')
-            for at in analogue.GetAtoms():
-                try:
-                    print(f'{at.GetIdx()} -> {at.GetProp("_GL_CORE_")} ', end='')
-                except KeyError:
-                    pass
-            print()
             analogues.append(analogue)
     return analogues
 
@@ -299,7 +267,6 @@ def replace_rgroups(mols: list[Chem.Mol], core_query: Chem.Mol,
     analogue_parents = []
     for mol in mols:
         if mol is not None and mol and mol.HasSubstructMatch(core_query):
-            print(f'Doing next mol')
             rdDepictor.Compute2DCoords(mol)
             core_and_rgroups = make_core_and_rgroups(mol, core_query)
             analogues = make_analogues(core_and_rgroups, substs_data,
@@ -321,9 +288,9 @@ def replace_rgroups(mols: list[Chem.Mol], core_query: Chem.Mol,
         analogue_smiles[smi] += 1
 
     table_name = f'Analogues of {input_column_name}'
-    parent_col = molecules_to_column(final_parents, input_column_name, DataType.BINARY)
+    parent_col = molecules_to_column(final_parents, f'Parents {input_column_name}', DataType.BINARY)
     analogue_col = molecules_to_column(final_analogues, 'Analogues', DataType.BINARY)
-    print(f'number of analogues : {len(all_analogues)}  {len(final_analogues)}')
+    return TableData(tableName=table_name, columns=[parent_col, analogue_col])
     return TableData(tableName=table_name, columns=[parent_col, analogue_col])
 
 
