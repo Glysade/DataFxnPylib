@@ -21,7 +21,7 @@ def load_substitutions_data() -> dict[str: tuple[list[str], list[str]]]:
     :return:
     """
     im_here = Path(__file__)
-    substs_file = im_here.parent.parent / 'Data' / 'top500_R_replacements.json'
+    substs_file = im_here.parent.parent.parent / 'Data' / 'top500_R_replacements.json'
     with open(substs_file, 'r') as f:
         raw_substs_data = load(f)
 
