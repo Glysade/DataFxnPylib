@@ -14,11 +14,11 @@ from df.data_transfer import DataFunction, DataFunctionRequest, \
     TableData, boolean_input_field, string_input_field
 
 
-def load_substitutions_data() -> dict[str: tuple[list[str], list[str]]]:
+def load_replacements_data() -> dict[str: tuple[list[str], list[str]]]:
     """
-    Load the substitutions data from the JSON file.  Returns a dict
+    Load the replacements data from the JSON file.  Returns a dict
     keyed on the SMILES of the thing to be replaced, containing a tuple
-    with the lists of SMILES of first and second layer substitutions.
+    with the lists of SMILES of first and second layer replacements.
     :return:
     """
     im_here = Path(__file__)
@@ -165,12 +165,12 @@ def make_rgroups_for_substs(rgroup_smi: str, atom_map_num: int,
                             substs_data: dict[str: tuple[list[str], list[str]]],
                             use_layer1: bool, use_layer2: bool) -> tuple[list[Chem.Mol], list[Chem.Mol]]:
     """
-    Lookup the substitutions for rgroup_smi in substs_data and build
+    Lookup the replacements for rgroup_smi in substs_data and build
     molecules from them with the atom_map_num added to the dummy atom
     so they are ready to go straight into molzip.  Returns lists of
-    the layer1 and layer2 substituents as requested.  If rgroup_smi
+    the layer1 and layer2 replacements as requested.  If rgroup_smi
     isn't in substs_data, just returns rgroup_smi suitably mackled so
-    that no substitution is performed in the end.  That's a bit
+    that no replacement is performed in the end.  That's a bit
     inefficient, but probably good enough.
 
     :param rgroup_smi:
@@ -203,7 +203,7 @@ def make_analogues(core_and_rgroups: list[tuple[Chem.Mol, list[str]]],
                    use_layer1: bool, use_layer2: bool) -> list[Chem.Mol]:
     """
     Take the list of core and r groups for the molecule, and make
-    analogues of each using the relevant substitution in substs_data.
+    analogues of each using the relevant replacement in substs_data.
     :param core_and_rgroups:
     :param substs_data:
     :param use_layer1:
@@ -258,12 +258,12 @@ def replace_rgroups(mols: list[Chem.Mol], core_query: Chem.Mol,
     :param core_query: query molecule defining the core.  Not all
                        molecules must match, but clearly only those
                        that do will produce analogues (Chem.Mol).
-    :param use_layer1: Use the layer 1 substituents in the table (bool)
-    :param use_layer2: Use the layer 1 substituents in the table (bool)
+    :param use_layer1: Use the layer 1 replacements in the table (bool)
+    :param use_layer2: Use the layer 1 replacements in the table (bool)
     :param input_column_name: (str)
     :return: The table of analogues (TableData)
     """
-    substs_data = load_substitutions_data()
+    substs_data = load_replacements_data()
 
     all_analogues = []
     analogue_parents = []
@@ -282,7 +282,7 @@ def replace_rgroups(mols: list[Chem.Mol], core_query: Chem.Mol,
     for analogue, parent in zip(all_analogues, analogue_parents):
         smi = Chem.MolToSmiles(analogue)
         if not analogue_smiles[smi]:
-            # align_analogue_to_parent(analogue, parent)
+            align_analogue_to_parent(analogue, parent)
             final_analogues.append(analogue)
             rdDepictor.Compute2DCoords(analogue)
             final_parents.append(parent)
@@ -291,10 +291,10 @@ def replace_rgroups(mols: list[Chem.Mol], core_query: Chem.Mol,
     table_name = f'Analogues of {input_column_name}'
     parent_col = molecules_to_column(final_parents, f'Parents {input_column_name}', DataType.BINARY)
     analogue_col = molecules_to_column(final_analogues, 'Analogues', DataType.BINARY)
-    return TableData(tableName=table_name, columns=[analogue_col])
+    return TableData(tableName=table_name, columns=[parent_col, analogue_col])
 
 
-class RGroupSubstitution(DataFunction):
+class RGroupReplacement(DataFunction):
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         column_id = string_input_field(request, 'structureColumn')
