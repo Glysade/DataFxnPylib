@@ -2,6 +2,7 @@ import re
 from collections import defaultdict
 from itertools import product
 from json import load
+from pathlib import Path
 
 from rdkit import Chem
 from rdkit.Chem import rdDepictor, rdMolAlign
@@ -20,7 +21,8 @@ def load_substitutions_data() -> dict[str: tuple[list[str], list[str]]]:
     with the lists of SMILES of first and second layer substitutions.
     :return:
     """
-    substs_file = 'top500_R_replacements.json'
+    im_here = Path(__file__)
+    substs_file = im_here.parent.parent.parent / 'Data' / 'top500_R_replacements.json'
     with open(substs_file, 'r') as f:
         raw_substs_data = load(f)
 
