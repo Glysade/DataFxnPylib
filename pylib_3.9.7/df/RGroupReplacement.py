@@ -297,7 +297,7 @@ def replace_rgroups(mols: list[Chem.Mol], core_query: Chem.Mol,
 class RGroupReplacement(DataFunction):
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
-        raise(request)
+        raise(ValueError(request))
         column_id = string_input_field(request, 'structureColumn')
         input_column = request.inputColumns[column_id]
         mols = column_to_molecules(input_column)
