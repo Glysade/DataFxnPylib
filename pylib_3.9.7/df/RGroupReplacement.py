@@ -308,6 +308,6 @@ class RGroupReplacement(DataFunction):
         use_layer1 = boolean_input_field(request, 'useLayer1')
         use_layer2 = boolean_input_field(request, 'useLayer2')
         analogues_table = replace_rgroups(mols, core_query, use_layer1,
-                                          use_layer2, input_column)
+                                          use_layer2, input_column.name)
         response = DataFunctionResponse(outputTables=[analogues_table])
         return response
