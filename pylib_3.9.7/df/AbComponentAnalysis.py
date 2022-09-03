@@ -60,7 +60,6 @@ class AbComponentAnalysis(DataFunction):
         seqPair = []
         blosumScore = []
         dataColumnVals = {dataColumnId: [] for dataColumnId in dataColumnIds}
-        print(f'dfvs = {dataColumnVals}')
 
         uniqueSeq = {}
         for seqColumnId in seqColumnIds:

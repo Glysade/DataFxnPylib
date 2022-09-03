@@ -1,5 +1,6 @@
 import base64
 import gzip
+import os.path
 import sqlite3
 from typing import List, Tuple
 
@@ -17,6 +18,8 @@ from ruse.rdkit.rdkit_utils import sanitize_mol, smiles_to_mol
 
 
 def database_properties(database_path: str) -> List[str]:
+    if not os.path.exists(database_path):
+        raise ValueError(f'Can''t find mmp database {database_path}')
     connection = sqlite3.connect(database_path)
     cursor = connection.cursor()
     properties = []
