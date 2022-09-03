@@ -297,6 +297,7 @@ def replace_rgroups(mols: list[Chem.Mol], core_query: Chem.Mol,
 class RGroupReplacement(DataFunction):
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
+        raise(request)
         column_id = string_input_field(request, 'structureColumn')
         input_column = request.inputColumns[column_id]
         mols = column_to_molecules(input_column)
@@ -307,7 +308,6 @@ class RGroupReplacement(DataFunction):
             core_query = input_field_to_molecule(request, 'coreSketcher')
         use_layer1 = boolean_input_field(request, 'useLayer1')
         use_layer2 = boolean_input_field(request, 'useLayer2')
-        raise ValueError(f'useLayer1 : {use_layer1}  useLayer2 : {use_layer2}')
         analogues_table = replace_rgroups(mols, core_query, use_layer1,
                                           use_layer2, input_column.name)
         response = DataFunctionResponse(outputTables=[analogues_table])
