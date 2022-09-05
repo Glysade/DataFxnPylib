@@ -1,14 +1,13 @@
 from typing import List, Dict, Optional, Union, Tuple
 
 from rdkit import Chem
-from rdkit.Chem import AllChem
 from rdkit.Chem.rdChemReactions import ChemicalReaction
 from rdkit.Chem.rdchem import Mol
 
 from df.chem_helper import column_to_molecules, molecules_to_column
 from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResponse, string_input_field, \
     string_list_input_field, DataType, ColumnData, TableData
-from ruse.rdkit.rdkit_utils import sanitize_mol
+from ruse.rdkit.rdkit_utils import sanitize_mol, string_to_reaction
 
 
 class ReactionTableSearch(DataFunction):
@@ -46,25 +45,7 @@ class ReactionTableSearch(DataFunction):
         rxn_field = request.inputFields['reactionQuery']
         rxn_text = str(rxn_field.data)
         rxn_content_type = rxn_field.contentType
-        rxn: ChemicalReaction
-        try:
-            if rxn_content_type in ['chemical/x-smiles', 'chemical/x-smarts']:
-                if '>>' not in rxn_text:
-                    raise ValueError(f'Input {rxn_text} is not a reaction smarts')
-                rxn = AllChem.ReactionFromSmarts(rxn_text)
-            elif rxn_content_type in ['chemical/x-mdl-molfile', 'chemical/x-mdl-molfile-v3000', 'chemical/x-mdl-rxnfile']:
-                if '$RXN' not in rxn_text:
-                    raise ValueError(f'Input is not a RXN block: {rxn_text}')
-                rxn = AllChem.ReactionFromRxnBlock(rxn_text)
-            else:
-                raise ValueError(f'Unable to convert content type {rxn_content_type} to reaction')
-        except:
-            raise ValueError(f'Unable to convert content type {rxn_content_type} value {rxn_text} to reaction')
-
-        try:
-            AllChem.SanitizeRxn(rxn)
-        except:
-            pass
+        rxn: ChemicalReaction = string_to_reaction(rxn_content_type, rxn_text)
         if rxn.GetNumProductTemplates() != 1:
             raise ValueError('Number of products in reaction is not one')
         if rxn.GetNumReactantTemplates() != 1:
