@@ -289,7 +289,7 @@ def replace_rgroups(mols: list[Chem.Mol], core_query: Chem.Mol,
         analogue_smiles[smi] += 1
 
     table_name = f'Analogues of {input_column_name}'
-    parent_col = molecules_to_column(final_parents, f'Parents {input_column_name}', DataType.BINARY)
+    parent_col = molecules_to_column(final_parents, f'Parent {input_column_name}', DataType.BINARY)
     analogue_col = molecules_to_column(final_analogues, 'Analogues', DataType.BINARY)
     return TableData(tableName=table_name, columns=[parent_col, analogue_col])
 
@@ -300,11 +300,7 @@ class RGroupReplacement(DataFunction):
         column_id = string_input_field(request, 'structureColumn')
         input_column = request.inputColumns[column_id]
         mols = column_to_molecules(input_column)
-        core_smarts = string_input_field(request, 'coreSMARTS')
-        if core_smarts:
-            core_query = Chem.MolFromSmarts(core_smarts)
-        else:
-            core_query = input_field_to_molecule(request, 'coreSketcher')
+        core_query = input_field_to_molecule(request, 'coreSketcher')
         use_layer1 = boolean_input_field(request, 'useLayer1')
         use_layer2 = boolean_input_field(request, 'useLayer2')
         analogues_table = replace_rgroups(mols, core_query, use_layer1,
