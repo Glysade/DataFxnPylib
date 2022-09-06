@@ -231,7 +231,8 @@ def make_analogues(core_and_rgroups: list[tuple[Chem.Mol, list[str]]],
 def align_analogue_to_parent(analogue: Chem.Mol, parent: Chem.Mol) -> None:
     """
     Use the information in atom props _GL_CORE_ to align the analogue
-    so that corresponding atoms are on top of the parent.
+    so that corresponding atoms are on top of the parent, and also
+    highlight the analogue atoms and bonds of the core.
     :param analogue:
     :param parent:
     :return:
@@ -243,6 +244,18 @@ def align_analogue_to_parent(analogue: Chem.Mol, parent: Chem.Mol) -> None:
         except KeyError:
             pass
     rdMolAlign.AlignMol(analogue, parent, atomMap=atom_map)
+    high_ats = [a[0] for a in atom_map]
+    high_bnds = []
+    for a1 in high_ats:
+        for a2 in high_ats:
+            if a1 > a2:
+                bond = analogue.GetBondBetweenAtoms(a1, a2)
+                if bond is not None:
+                    high_bnds.append(bond.GetIdx())
+    high_ats_str = ' '.join([str(a + 1) for a in high_ats])
+    high_bnds_str = ' '.join([str(b + 1) for b in high_bnds])
+    prop_text = f'COLOR #ff0000\nATOMS {high_ats_str}\nBONDS {high_bnds_str}'
+    analogue.SetProp('Renderer_Highlight', prop_text)
 
 
 def replace_rgroups(mols: list[Chem.Mol], core_query: Chem.Mol,
@@ -289,7 +302,7 @@ def replace_rgroups(mols: list[Chem.Mol], core_query: Chem.Mol,
         analogue_smiles[smi] += 1
 
     table_name = f'Analogues of {input_column_name}'
-    parent_col = molecules_to_column(final_parents, f'Parents {input_column_name}', DataType.BINARY)
+    parent_col = molecules_to_column(final_parents, f'Parent {input_column_name}', DataType.BINARY)
     analogue_col = molecules_to_column(final_analogues, 'Analogues', DataType.BINARY)
     return TableData(tableName=table_name, columns=[parent_col, analogue_col])
 
@@ -300,11 +313,7 @@ class RGroupReplacement(DataFunction):
         column_id = string_input_field(request, 'structureColumn')
         input_column = request.inputColumns[column_id]
         mols = column_to_molecules(input_column)
-        core_smarts = string_input_field(request, 'coreSMARTS')
-        if core_smarts:
-            core_query = Chem.MolFromSmarts(core_smarts)
-        else:
-            core_query = input_field_to_molecule(request, 'coreSketcher')
+        core_query = input_field_to_molecule(request, 'coreSketcher')
         use_layer1 = boolean_input_field(request, 'useLayer1')
         use_layer2 = boolean_input_field(request, 'useLayer2')
         analogues_table = replace_rgroups(mols, core_query, use_layer1,
