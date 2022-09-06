@@ -231,7 +231,8 @@ def make_analogues(core_and_rgroups: list[tuple[Chem.Mol, list[str]]],
 def align_analogue_to_parent(analogue: Chem.Mol, parent: Chem.Mol) -> None:
     """
     Use the information in atom props _GL_CORE_ to align the analogue
-    so that corresponding atoms are on top of the parent.
+    so that corresponding atoms are on top of the parent, and also
+    highlight the analogue atoms and bonds of the core.
     :param analogue:
     :param parent:
     :return:
@@ -243,6 +244,18 @@ def align_analogue_to_parent(analogue: Chem.Mol, parent: Chem.Mol) -> None:
         except KeyError:
             pass
     rdMolAlign.AlignMol(analogue, parent, atomMap=atom_map)
+    high_ats = [a[0] for a in atom_map]
+    high_bnds = []
+    for a1 in high_ats:
+        for a2 in high_ats:
+            if a1 != a2:
+                bond = analogue.GetBondBetweenAtoms(a1, a2)
+                if bond is not None:
+                    high_bnds.append(bond.GetIdx())
+    high_ats_str = ' '.join([str(a + 1) for a in high_ats])
+    high_bnds_str = ' '.join([str(b + 1) for b in high_bnds])
+    prop_text = f'COLOR #ff0000\nATOMS {high_ats_str}\nBONDS {high_bnds_str}'
+    analogue.SetProp('Renderer_Highlight', prop_text)
 
 
 def replace_rgroups(mols: list[Chem.Mol], core_query: Chem.Mol,
