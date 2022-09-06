@@ -248,7 +248,7 @@ def align_analogue_to_parent(analogue: Chem.Mol, parent: Chem.Mol) -> None:
     high_bnds = []
     for a1 in high_ats:
         for a2 in high_ats:
-            if a1 != a2:
+            if a1 > a2:
                 bond = analogue.GetBondBetweenAtoms(a1, a2)
                 if bond is not None:
                     high_bnds.append(bond.GetIdx())
