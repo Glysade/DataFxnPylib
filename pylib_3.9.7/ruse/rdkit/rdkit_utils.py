@@ -17,7 +17,8 @@ from io import BytesIO, StringIO
 from typing import Iterable, Union, List, Optional
 
 from rdkit import Chem
-from rdkit.Chem import RWMol, SanitizeFlags
+from rdkit.Chem import AllChem, RWMol, SanitizeFlags
+from rdkit.Chem.rdChemReactions import ChemicalReaction
 from rdkit.Chem.rdchem import Mol, KekulizeException, AtomValenceException
 from rdkit.Geometry.rdGeometry import Point3D
 
@@ -30,11 +31,14 @@ class RDKitFormat(Enum):
         - sdf
         - pdb
         - smi
+        - sma
+        - rxn
     """
     sdf = 1
     pdb = 2
     smi = 3
     sma = 4
+    rxn = 5
 
 
 def type_to_format(type: str) -> RDKitFormat:
@@ -53,11 +57,13 @@ def type_to_format(type: str) -> RDKitFormat:
         return RDKitFormat.sma
     elif type in ['chemical/x-smiles', 'chemical/x-daylight-smiles']:
         return RDKitFormat.smi
+    elif type in ['chemical/x-mdl-rxnfile']:
+        return RDKitFormat.rxn
     else:
         raise ValueError("Unknown chemical type {}".format(type))
 
 
-def string_to_mol(type: RDKitFormat, mol_string: str) -> Optional[Mol]:
+def string_to_mol(type: RDKitFormat, mol_string: str) -> Optional[Union[Mol, ChemicalReaction]]:
     """
     Converts a string to an RDKit molecule
 
@@ -74,6 +80,8 @@ def string_to_mol(type: RDKitFormat, mol_string: str) -> Optional[Mol]:
         mol = smiles_to_mol(mol_string)
     elif type == RDKitFormat.sma:
         mol = Chem.MolFromSmarts(mol_string)
+    elif type == RDKitFormat.rxn:
+        mol = AllChem.ReactionFromRxnBlock(mol_string)
     else:
         raise ValueError("Unable to convert type {} from block".format(type))
 
@@ -177,6 +185,29 @@ def smiles_to_mol(smiles: str) -> Optional[Mol]:
         name = type(ex).__name__
         print('Got exception {} processing smiles {}'.format(name, smiles))
         return None
+
+
+def string_to_reaction(rxn_content_type: str, rxn_text: str) -> Optional[ChemicalReaction]:
+    rxn: ChemicalReaction
+    try:
+        if rxn_content_type in ['chemical/x-smiles', 'chemical/x-smarts']:
+            if '>>' not in rxn_text:
+                raise ValueError(f'Input {rxn_text} is not a reaction smarts')
+            rxn = AllChem.ReactionFromSmarts(rxn_text)
+        elif rxn_content_type in ['chemical/x-mdl-molfile', 'chemical/x-mdl-molfile-v3000', 'chemical/x-mdl-rxnfile']:
+            if '$RXN' not in rxn_text:
+                raise ValueError(f'Input is not a RXN block: {rxn_text}')
+            rxn = AllChem.ReactionFromRxnBlock(rxn_text)
+        else:
+            raise ValueError(f'Unable to convert content type {rxn_content_type} to reaction')
+    except:
+        raise ValueError(f'Unable to convert content type {rxn_content_type} value {rxn_text} to reaction')
+
+    try:
+        AllChem.SanitizeRxn(rxn)
+    except:
+        pass
+    return rxn
 
 
 def mol_to_string(type: RDKitFormat, mol: Mol, isomeric_smiles=True) -> str:
