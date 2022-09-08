@@ -286,8 +286,11 @@ def replace_rgroups(mols: list[Chem.Mol], core_query: Chem.Mol,
             core_and_rgroups = make_core_and_rgroups(mol, core_query)
             analogues = make_analogues(core_and_rgroups, substs_data,
                                        use_layer1, use_layer2)
-            all_analogues.extend(analogues)
-            analogue_parents.extend([mol] * len(analogues))
+            parent_smi = Chem.MolToSmiles(mol)
+            for analogue in analogues:
+                if Chem.MolToSmiles(analogue) != parent_smi:
+                    all_analogues.append(analogue)
+                    analogue_parents.append(mol)
 
     analogue_smiles = defaultdict(int)
     final_analogues = []
