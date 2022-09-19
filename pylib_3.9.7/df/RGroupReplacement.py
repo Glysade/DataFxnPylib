@@ -249,6 +249,7 @@ def make_analogues(core_and_rgroups: list[tuple[Chem.Mol, list[str]]],
                 analogue = Chem.CombineMols(analogue, s)
             analogue = Chem.molzip(analogue)
             analogues.append(analogue)
+
     return analogues
 
 
@@ -309,10 +310,12 @@ def replace_rgroups(mols: list[Chem.Mol], ids: list[Any],
     analogue_parents = []
     analogue_parent_ids = []
     analogue_count = {}
+    input_smiles = []
     for mol, id in zip(mols, ids):
         if id not in analogue_count:
             analogue_count[id] = 0
         if mol is not None and mol and mol.HasSubstructMatch(core_query):
+            input_smiles.append(Chem.MolToSmiles(mol))
             rdDepictor.Compute2DCoords(mol)
             core_and_rgroups = make_core_and_rgroups(mol, core_query)
             analogues = make_analogues(core_and_rgroups, substs_data,
@@ -328,9 +331,10 @@ def replace_rgroups(mols: list[Chem.Mol], ids: list[Any],
     final_analogues = []
     final_parents = []
     final_parent_ids = []
+    input_smiles_set = set(input_smiles)
     for analogue, parent, parent_id in zip(all_analogues, analogue_parents, analogue_parent_ids):
         smi = Chem.MolToSmiles(analogue)
-        if not analogue_smiles[smi]:
+        if not analogue_smiles[smi] and smi not in input_smiles_set:
             align_analogue_to_parent(analogue, parent)
             final_analogues.append(analogue)
             rdDepictor.Compute2DCoords(analogue)
