@@ -321,9 +321,7 @@ def replace_rgroups(mols: list[Chem.Mol], ids: list[str],
                                 values=final_parent_ids)
     analogue_col = molecules_to_column(final_analogues, 'Analogues',
                                        DataType.BINARY)
-    print(analogue_count)
     analogue_count_col = [analogue_count[id] for id in ids]
-    print(analogue_count_col)
     return TableData(tableName=table_name, columns=[parent_col, parent_ids_col,
                                                     analogue_col]), analogue_count_col
 
