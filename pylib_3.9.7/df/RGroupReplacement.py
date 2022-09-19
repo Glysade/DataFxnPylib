@@ -10,7 +10,7 @@ from rdkit.Chem import rdDepictor, rdMolAlign
 from df.chem_helper import column_to_molecules, input_field_to_molecule, \
     molecules_to_column
 from df.data_transfer import DataFunction, DataFunctionRequest, \
-    DataFunctionResponse, DataType, \
+    DataFunctionResponse, ColumnData, DataType, \
     TableData, boolean_input_field, string_input_field
 
 
@@ -258,9 +258,10 @@ def align_analogue_to_parent(analogue: Chem.Mol, parent: Chem.Mol) -> None:
     analogue.SetProp('Renderer_Highlight', prop_text)
 
 
-def replace_rgroups(mols: list[Chem.Mol], core_query: Chem.Mol,
+def replace_rgroups(mols: list[Chem.Mol], ids: list[str],
+                    core_query: Chem.Mol,
                     use_layer1: bool, use_layer2: bool,
-                    input_column_name: str) -> TableData:
+                    input_column_name: str) -> tuple[TableData, list[int]]:
     """
     Take the list of molecules, use the core_query to define R Groups
     of it, and then create a table of analogues where the R Groups are
@@ -268,6 +269,7 @@ def replace_rgroups(mols: list[Chem.Mol], core_query: Chem.Mol,
     a new analogue, with the first column the parent molecule.
     :param mols: list of molecules from which analogues are to be
                  derived ([Chem.mol, ]).
+    :param ids: list of names of molecules from input table column
     :param core_query: query molecule defining the core.  Not all
                        molecules must match, but clearly only those
                        that do will produce analogues (Chem.Mol).
@@ -280,7 +282,11 @@ def replace_rgroups(mols: list[Chem.Mol], core_query: Chem.Mol,
 
     all_analogues = []
     analogue_parents = []
-    for mol in mols:
+    analogue_parent_ids = []
+    analogue_count = {}
+    for mol, id in zip(mols, ids):
+        if id not in analogue_count:
+            analogue_count[id] = 0
         if mol is not None and mol and mol.HasSubstructMatch(core_query):
             rdDepictor.Compute2DCoords(mol)
             core_and_rgroups = make_core_and_rgroups(mol, core_query)
@@ -291,23 +297,35 @@ def replace_rgroups(mols: list[Chem.Mol], core_query: Chem.Mol,
                 if Chem.MolToSmiles(analogue) != parent_smi:
                     all_analogues.append(analogue)
                     analogue_parents.append(mol)
+                    analogue_parent_ids.append(id)
 
     analogue_smiles = defaultdict(int)
     final_analogues = []
     final_parents = []
-    for analogue, parent in zip(all_analogues, analogue_parents):
+    final_parent_ids = []
+    for analogue, parent, parent_id in zip(all_analogues, analogue_parents, analogue_parent_ids):
         smi = Chem.MolToSmiles(analogue)
         if not analogue_smiles[smi]:
             align_analogue_to_parent(analogue, parent)
             final_analogues.append(analogue)
             rdDepictor.Compute2DCoords(analogue)
             final_parents.append(parent)
+            final_parent_ids.append(parent_id)
+            analogue_count[parent_id] += 1
         analogue_smiles[smi] += 1
 
     table_name = f'Analogues of {input_column_name}'
-    parent_col = molecules_to_column(final_parents, f'Parent {input_column_name}', DataType.BINARY)
-    analogue_col = molecules_to_column(final_analogues, 'Analogues', DataType.BINARY)
-    return TableData(tableName=table_name, columns=[parent_col, analogue_col])
+    parent_col = molecules_to_column(final_parents, f'Parent {input_column_name}',
+                                     DataType.BINARY)
+    parent_ids_col = ColumnData(name='Parent IDs', dataType=DataType.STRING,
+                                values=final_parent_ids)
+    analogue_col = molecules_to_column(final_analogues, 'Analogues',
+                                       DataType.BINARY)
+    print(analogue_count)
+    analogue_count_col = [analogue_count[id] for id in ids]
+    print(analogue_count_col)
+    return TableData(tableName=table_name, columns=[parent_col, parent_ids_col,
+                                                    analogue_col]), analogue_count_col
 
 
 class RGroupReplacement(DataFunction):
@@ -315,11 +333,20 @@ class RGroupReplacement(DataFunction):
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         column_id = string_input_field(request, 'structureColumn')
         input_column = request.inputColumns[column_id]
+        column_id = string_input_field(request, 'idColumn')
         mols = column_to_molecules(input_column)
+        id_column = request.inputColumns[column_id]
+        ids = id_column.values
+
         core_query = input_field_to_molecule(request, 'coreSketcher')
         use_layer1 = boolean_input_field(request, 'useLayer1')
         use_layer2 = boolean_input_field(request, 'useLayer2')
-        analogues_table = replace_rgroups(mols, core_query, use_layer1,
-                                          use_layer2, input_column.name)
-        response = DataFunctionResponse(outputTables=[analogues_table])
+        analogues_table, analogue_count_col_vals =\
+            replace_rgroups(mols, ids, core_query, use_layer1, use_layer2,
+                            input_column.name)
+        analogue_count_col = ColumnData(name=f'Num R Group Subs {input_column.name}',
+                                        dataType=DataType.INTEGER,
+                                        values=analogue_count_col_vals)
+        response = DataFunctionResponse(outputTables=[analogues_table],
+                                        outputColumns=[analogue_count_col])
         return response
