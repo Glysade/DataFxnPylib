@@ -6,6 +6,7 @@ from pathlib import Path
 
 from rdkit import Chem
 from rdkit.Chem import rdDepictor, rdMolAlign
+from rdkit.Chem.rdchem import MolSanitizeException
 
 from df.chem_helper import column_to_molecules, input_field_to_molecule, \
     molecules_to_column
@@ -97,7 +98,13 @@ def make_core_and_rgroups(mol: Chem.Mol, core_query: Chem.Mol) -> list[tuple[Che
             if atom.GetIsotope() > 1000:
                 atom.SetAtomMapNum(atom.GetIsotope())
                 atom.SetIsotope(0)
-        frags = Chem.GetMolFrags(frag_mol, asMols=True)
+        # Don't sanitize the fragments as they may contain partial
+        # aromatic rings that will throw an exception.  They will
+        # be bidentate (by definition), so added back on below and
+        # the problem avoided.
+        frags = Chem.GetMolFrags(frag_mol, asMols=True,
+                                 sanitizeFrags=False)
+
         frag_core = None
         r_group_smis = []
         bidentates = []
@@ -113,9 +120,25 @@ def make_core_and_rgroups(mol: Chem.Mol, core_query: Chem.Mol) -> list[tuple[Che
                 if num_stars > 1:
                     bidentates.append(frag)
                 else:
+                    # Non-bidentate fragments can now be sanitized
+                    # which will make the lookup later more reliable.
+                    # If they won't sanitize, keep them for now but it
+                    # is more than likely that they will not have any
+                    # replacements so will be put straight back on
+                    # again.
+                    try:
+                        Chem.SanitizeMol(frag)
+                        smi = Chem.MolToSmiles(frag)
+                    except MolSanitizeException:
+                        pass
                     r_group_smis.append(smi)
 
-        # if we have bidentate substituents, add them back to the core
+        # If we have bidentate substituents, add them back to the core.
+        # This may generate an error "Incomplete atom labelling, cannot make bond"
+        # which is (I think) molzip complaining that not all atom mappings in
+        # frag_core have a match in bid, which is expected because we are
+        # only repairing the bidentate removal and leaving the rest of the
+        # fragmentation for the r group replacement.
         if bidentates:
             for bid in bidentates:
                 frag_core = Chem.CombineMols(frag_core, bid)
