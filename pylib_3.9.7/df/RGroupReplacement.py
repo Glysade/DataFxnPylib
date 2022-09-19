@@ -180,7 +180,10 @@ def make_mapped_rgroups(smis: list[str], atom_map_num: int) -> list[Chem.Mol]:
     ret_mols = []
     for smi in smis:
         smi = smi.replace('*', f'[*:{atom_map_num}]')
-        ret_mols.append(Chem.MolFromSmiles(smi))
+        frag_mol = Chem.MolFromSmiles(smi)
+        for at in frag_mol.GetAtoms():
+            at.SetProp('_GL_R_GROUP_', f'{at.GetIdx()}')
+        ret_mols.append(frag_mol)
 
     return ret_mols
 
@@ -253,6 +256,21 @@ def make_analogues(core_and_rgroups: list[tuple[Chem.Mol, list[str]]],
     return analogues
 
 
+def bonds_between_atoms(mol: Chem.Mol, atoms: list[int]) -> list[int]:
+    """
+    Return the bonds in the molecule between the atoms whose indices
+    are supplied.
+    """
+    bonds = []
+    for a1 in atoms:
+        for a2 in atoms:
+            if a1 > a2:
+                bond = mol.GetBondBetweenAtoms(a1, a2)
+                if bond is not None:
+                    bonds.append(bond.GetIdx())
+    return bonds
+
+
 def align_analogue_to_parent(analogue: Chem.Mol, parent: Chem.Mol) -> None:
     """
     Use the information in atom props _GL_CORE_ to align the analogue
@@ -262,24 +280,38 @@ def align_analogue_to_parent(analogue: Chem.Mol, parent: Chem.Mol) -> None:
     :param parent:
     :return:
     """
-    atom_map = []
+    core_map = []
+    r_group_ats = []
     for at in analogue.GetAtoms():
         try:
-            atom_map.append((at.GetIdx(), int(at.GetProp('_GL_CORE_'))))
+            core_map.append((at.GetIdx(), int(at.GetProp('_GL_CORE_'))))
         except KeyError:
             pass
-    rdMolAlign.AlignMol(analogue, parent, atomMap=atom_map)
-    high_ats = [a[0] for a in atom_map]
-    high_bnds = []
-    for a1 in high_ats:
-        for a2 in high_ats:
-            if a1 > a2:
-                bond = analogue.GetBondBetweenAtoms(a1, a2)
-                if bond is not None:
-                    high_bnds.append(bond.GetIdx())
-    high_ats_str = ' '.join([str(a + 1) for a in high_ats])
-    high_bnds_str = ' '.join([str(b + 1) for b in high_bnds])
-    prop_text = f'COLOR #ff0000\nATOMS {high_ats_str}\nBONDS {high_bnds_str}'
+
+        if at.HasProp('_GL_R_GROUP_'):
+            r_group_ats.append(at.GetIdx())
+    rdMolAlign.AlignMol(analogue, parent, atomMap=core_map)
+    core_ats = [a[0] for a in core_map]
+    core_bonds = bonds_between_atoms(analogue, core_ats)
+    r_group_bonds = bonds_between_atoms(analogue, r_group_ats)
+
+    for ca in core_ats:
+        found_it = False
+        for rga in r_group_ats:
+            bond = analogue.GetBondBetweenAtoms(ca, rga)
+            if bond is not None:
+                r_group_bonds.append(bond.GetIdx())
+                found_it = True
+                break
+        if found_it:
+            break
+
+    core_ats_str = ' '.join([str(a + 1) for a in core_ats])
+    core_bonds_str = ' '.join([str(b + 1) for b in core_bonds])
+    r_group_ats_str = ' '.join([str(a + 1) for a in r_group_ats])
+    r_group_bonds_str = ' '.join([str(b + 1) for b in r_group_bonds])
+    prop_text = f'COLOR #ff0000\nATOMS {core_ats_str}\nBONDS {core_bonds_str}' \
+                f'\nCOLOR #0000ff\nATOMS {r_group_ats_str}\nBONDS {r_group_bonds_str}'
     analogue.SetProp('Renderer_Highlight', prop_text)
 
 
