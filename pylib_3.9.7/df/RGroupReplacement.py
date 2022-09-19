@@ -248,10 +248,22 @@ def make_analogues(core_and_rgroups: list[tuple[Chem.Mol, list[str]]],
             rgroup_repls.append(layer1_mols + layer2_mols)
         for substs in product(*rgroup_repls):
             analogue = Chem.Mol(core)
+            print('subst ats')
             for s in substs:
+                for at in s.GetAtoms():
+                    try:
+                        print(f'{at.GetIdx()} : {at.GetProp("_GL_R_GROUP_")} : {at.GetAtomicNum()}')
+                    except KeyError:
+                        pass
                 analogue = Chem.CombineMols(analogue, s)
             analogue = Chem.molzip(analogue)
             analogues.append(analogue)
+            print('R Group ats')
+            for at in analogue.GetAtoms():
+                try:
+                    print(f'{at.GetIdx()} : {at.GetProp("_GL_R_GROUP_")}')
+                except KeyError:
+                    pass
 
     return analogues
 
@@ -287,7 +299,6 @@ def align_analogue_to_parent(analogue: Chem.Mol, parent: Chem.Mol) -> None:
             core_map.append((at.GetIdx(), int(at.GetProp('_GL_CORE_'))))
         except KeyError:
             pass
-
         if at.HasProp('_GL_R_GROUP_'):
             r_group_ats.append(at.GetIdx())
     rdMolAlign.AlignMol(analogue, parent, atomMap=core_map)
@@ -296,15 +307,11 @@ def align_analogue_to_parent(analogue: Chem.Mol, parent: Chem.Mol) -> None:
     r_group_bonds = bonds_between_atoms(analogue, r_group_ats)
 
     for ca in core_ats:
-        found_it = False
         for rga in r_group_ats:
             bond = analogue.GetBondBetweenAtoms(ca, rga)
             if bond is not None:
                 r_group_bonds.append(bond.GetIdx())
                 found_it = True
-                break
-        if found_it:
-            break
 
     core_ats_str = ' '.join([str(a + 1) for a in core_ats])
     core_bonds_str = ' '.join([str(b + 1) for b in core_bonds])
@@ -312,6 +319,7 @@ def align_analogue_to_parent(analogue: Chem.Mol, parent: Chem.Mol) -> None:
     r_group_bonds_str = ' '.join([str(b + 1) for b in r_group_bonds])
     prop_text = f'COLOR #ff0000\nATOMS {core_ats_str}\nBONDS {core_bonds_str}' \
                 f'\nCOLOR #0000ff\nATOMS {r_group_ats_str}\nBONDS {r_group_bonds_str}'
+    prop_text = f'COLOR #0000ff\nATOMS {r_group_ats_str}\nBONDS {r_group_bonds_str}'
     analogue.SetProp('Renderer_Highlight', prop_text)
 
 
