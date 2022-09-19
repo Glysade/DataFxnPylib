@@ -359,15 +359,16 @@ class RGroupReplacement(DataFunction):
         id_column = request.inputColumns[column_id]
         ids = id_column.values
 
+        print(f'number of mols and ids : {len(mols)}  {len(ids)}')
         core_query = input_field_to_molecule(request, 'coreSketcher')
         use_layer1 = boolean_input_field(request, 'useLayer1')
         use_layer2 = boolean_input_field(request, 'useLayer2')
         analogues_table, analogue_count_col_vals =\
             replace_rgroups(mols, ids, core_query, use_layer1, use_layer2,
                             input_column.name)
+        print(analogue_count_col_vals)
         analogue_count_col = ColumnData(name=f'Num R Group Subs {input_column.name}',
                                         dataType=DataType.INTEGER,
                                         values=analogue_count_col_vals)
-        response = DataFunctionResponse(outputTables=[analogues_table],
-                                        outputColumns=[analogue_count_col])
+        response = DataFunctionResponse(outputTables=[analogues_table])
         return response
