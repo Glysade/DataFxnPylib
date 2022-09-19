@@ -307,7 +307,7 @@ def align_analogue_to_parent(analogue: Chem.Mol, parent: Chem.Mol) -> None:
     r_group_bonds_str = ' '.join([str(b + 1) for b in r_group_bonds])
     prop_text = f'COLOR #ff0000\nATOMS {core_ats_str}\nBONDS {core_bonds_str}' \
                 f'\nCOLOR #0000ff\nATOMS {r_group_ats_str}\nBONDS {r_group_bonds_str}'
-    prop_text = f'COLOR #0000ff\nATOMS {r_group_ats_str}\nBONDS {r_group_bonds_str}'
+    # prop_text = f'COLOR #0000ff\nATOMS {r_group_ats_str}\nBONDS {r_group_bonds_str}'
     analogue.SetProp('Renderer_Highlight', prop_text)
 
 
