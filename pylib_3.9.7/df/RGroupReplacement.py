@@ -3,6 +3,7 @@ from collections import defaultdict
 from itertools import product
 from json import load
 from pathlib import Path
+from typing import Any
 
 from rdkit import Chem
 from rdkit.Chem import rdDepictor, rdMolAlign
@@ -281,8 +282,8 @@ def align_analogue_to_parent(analogue: Chem.Mol, parent: Chem.Mol) -> None:
     analogue.SetProp('Renderer_Highlight', prop_text)
 
 
-def replace_rgroups(mols: list[Chem.Mol], ids: list[str],
-                    core_query: Chem.Mol,
+def replace_rgroups(mols: list[Chem.Mol], ids: list[Any],
+                    id_type: DataType, core_query: Chem.Mol,
                     use_layer1: bool, use_layer2: bool,
                     input_column_name: str) -> tuple[TableData, list[int]]:
     """
@@ -293,6 +294,7 @@ def replace_rgroups(mols: list[Chem.Mol], ids: list[str],
     :param mols: list of molecules from which analogues are to be
                  derived ([Chem.mol, ]).
     :param ids: list of names of molecules from input table column
+    :param id_type: type of the ID data
     :param core_query: query molecule defining the core.  Not all
                        molecules must match, but clearly only those
                        that do will produce analogues (Chem.Mol).
@@ -333,14 +335,14 @@ def replace_rgroups(mols: list[Chem.Mol], ids: list[str],
             final_analogues.append(analogue)
             rdDepictor.Compute2DCoords(analogue)
             final_parents.append(parent)
-            final_parent_ids.append(str(parent_id))
+            final_parent_ids.append(parent_id)
             analogue_count[parent_id] += 1
         analogue_smiles[smi] += 1
 
     table_name = f'Analogues of {input_column_name}'
     parent_col = molecules_to_column(final_parents, f'Parent {input_column_name}',
                                      DataType.BINARY)
-    parent_ids_col = ColumnData(name='Parent IDs', dataType=DataType.STRING,
+    parent_ids_col = ColumnData(name='Parent IDs', dataType=id_type,
                                 values=final_parent_ids)
     analogue_col = molecules_to_column(final_analogues, 'Analogues',
                                        DataType.BINARY)
@@ -359,14 +361,12 @@ class RGroupReplacement(DataFunction):
         id_column = request.inputColumns[column_id]
         ids = id_column.values
 
-        print(f'number of mols and ids : {len(mols)}  {len(ids)}')
         core_query = input_field_to_molecule(request, 'coreSketcher')
         use_layer1 = boolean_input_field(request, 'useLayer1')
         use_layer2 = boolean_input_field(request, 'useLayer2')
         analogues_table, analogue_count_col_vals =\
-            replace_rgroups(mols, ids, core_query, use_layer1, use_layer2,
-                            input_column.name)
-        print(analogue_count_col_vals)
+            replace_rgroups(mols, ids, id_column.dataType, core_query, use_layer1,
+                            use_layer2, input_column.name)
         analogue_count_col = ColumnData(name=f'Num R Group Subs {input_column.name}',
                                         dataType=DataType.INTEGER,
                                         values=analogue_count_col_vals)
