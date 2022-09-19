@@ -333,7 +333,7 @@ def replace_rgroups(mols: list[Chem.Mol], ids: list[str],
             final_analogues.append(analogue)
             rdDepictor.Compute2DCoords(analogue)
             final_parents.append(parent)
-            final_parent_ids.append(parent_id)
+            final_parent_ids.append(str(parent_id))
             analogue_count[parent_id] += 1
         analogue_smiles[smi] += 1
 
@@ -370,5 +370,6 @@ class RGroupReplacement(DataFunction):
         analogue_count_col = ColumnData(name=f'Num R Group Subs {input_column.name}',
                                         dataType=DataType.INTEGER,
                                         values=analogue_count_col_vals)
-        response = DataFunctionResponse(outputTables=[analogues_table])
+        response = DataFunctionResponse(outputTables=[analogues_table],
+                                        outputColumns=[analogue_count_col])
         return response
