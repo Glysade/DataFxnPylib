@@ -169,20 +169,24 @@ def make_rgroup_lookup_smi(rgroup: str) -> tuple[str, int]:
     return Chem.MolToSmiles(mol), atom_map_num
 
 
-def make_mapped_rgroups(smis: list[str], atom_map_num: int) -> list[Chem.Mol]:
+def make_mapped_rgroups(smis: list[str], atom_map_num: int, rgroup_smi: str) -> list[Chem.Mol]:
     """
     Take the SMIlES strings, create a Mol for each one and add the atom
-    map num to the dummy atom.
+    map num to the dummy atom.  If the SMILES for the R Group isn't the
+    same as the original, flog the atoms with the property _GL_R_GROUP_
+    for subsequent coloured rendering.
     :param smis:
     :param atom_map_num:
+    :param rgroup_smi:
     :return:
     """
     ret_mols = []
     for smi in smis:
-        smi = smi.replace('*', f'[*:{atom_map_num}]')
-        frag_mol = Chem.MolFromSmiles(smi)
-        for at in frag_mol.GetAtoms():
-            at.SetProp('_GL_R_GROUP_', f'{at.GetIdx()}')
+        map_smi = smi.replace('*', f'[*:{atom_map_num}]')
+        frag_mol = Chem.MolFromSmiles(map_smi)
+        if smi != rgroup_smi:
+            for at in frag_mol.GetAtoms():
+                at.SetProp('_GL_R_GROUP_', f'{at.GetIdx()}')
         ret_mols.append(frag_mol)
 
     return ret_mols
@@ -214,13 +218,15 @@ def make_rgroups_for_substs(rgroup_smi: str, atom_map_num: int,
             layer1_smis = substs_data[rgroup_smi][0]
         except KeyError:
             layer1_smis = [rgroup_smi]
-        layer1_mols = make_mapped_rgroups(layer1_smis, atom_map_num)
+        layer1_mols = make_mapped_rgroups(layer1_smis, atom_map_num,
+                                          rgroup_smi)
     if use_layer2:
         try:
             layer2_smis = substs_data[rgroup_smi][1]
         except KeyError:
             layer2_smis = [rgroup_smi]
-        layer2_mols = make_mapped_rgroups(layer2_smis, atom_map_num)
+        layer2_mols = make_mapped_rgroups(layer2_smis, atom_map_num,
+                                          rgroup_smi)
 
     return layer1_mols, layer2_mols
 
