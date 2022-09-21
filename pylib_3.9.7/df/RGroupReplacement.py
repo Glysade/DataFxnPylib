@@ -332,7 +332,7 @@ def align_analogue_to_parent(analogue: Chem.Mol, parent: Chem.Mol) -> None:
     if layer_2_ats:
         layer_2_ats_str = ' '.join([str(a + 1) for a in layer_2_ats])
         layer_2_bonds_str = ' '.join([str(b + 1) for b in layer_2_bonds])
-        prop_text += f'\nCOLOR #ffa500\nATOMS {layer_2_ats_str}\nBONDS {layer_2_bonds_str}'
+        prop_text += f'\nCOLOR #ffbf00\nATOMS {layer_2_ats_str}\nBONDS {layer_2_bonds_str}'
     # prop_text = f'COLOR #0000ff\nATOMS {layer_1_ats_str}\nBONDS {layer_1_bonds_str}'
     analogue.SetProp('Renderer_Highlight', prop_text)
 
