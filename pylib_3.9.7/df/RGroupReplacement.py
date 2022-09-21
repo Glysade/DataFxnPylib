@@ -169,24 +169,27 @@ def make_rgroup_lookup_smi(rgroup: str) -> tuple[str, int]:
     return Chem.MolToSmiles(mol), atom_map_num
 
 
-def make_mapped_rgroups(smis: list[str], atom_map_num: int, rgroup_smi: str) -> list[Chem.Mol]:
+def make_mapped_rgroups(smis: list[str], atom_map_num: int, rgroup_smi: str,
+                        layer_number: str) -> list[Chem.Mol]:
     """
     Take the SMIlES strings, create a Mol for each one and add the atom
     map num to the dummy atom.  If the SMILES for the R Group isn't the
     same as the original, flog the atoms with the property _GL_R_GROUP_
-    for subsequent coloured rendering.
+    plus layer_number for subsequent coloured rendering.
     :param smis:
     :param atom_map_num:
     :param rgroup_smi:
+    :param layer_number:
     :return:
     """
     ret_mols = []
+    prop_name = '_GL_R_GROUP_' + layer_number + '_'
     for smi in smis:
         map_smi = smi.replace('*', f'[*:{atom_map_num}]')
         frag_mol = Chem.MolFromSmiles(map_smi)
         if smi != rgroup_smi:
             for at in frag_mol.GetAtoms():
-                at.SetProp('_GL_R_GROUP_', f'{at.GetIdx()}')
+                at.SetProp(prop_name, f'{at.GetIdx()}')
         ret_mols.append(frag_mol)
 
     return ret_mols
@@ -219,14 +222,14 @@ def make_rgroups_for_substs(rgroup_smi: str, atom_map_num: int,
         except KeyError:
             layer1_smis = [rgroup_smi]
         layer1_mols = make_mapped_rgroups(layer1_smis, atom_map_num,
-                                          rgroup_smi)
+                                          rgroup_smi, '1')
     if use_layer2:
         try:
             layer2_smis = substs_data[rgroup_smi][1]
         except KeyError:
             layer2_smis = [rgroup_smi]
         layer2_mols = make_mapped_rgroups(layer2_smis, atom_map_num,
-                                          rgroup_smi)
+                                          rgroup_smi, '2')
 
     return layer1_mols, layer2_mols
 
@@ -282,38 +285,55 @@ def align_analogue_to_parent(analogue: Chem.Mol, parent: Chem.Mol) -> None:
     Use the information in atom props _GL_CORE_ to align the analogue
     so that corresponding atoms are on top of the parent, and also
     highlight the analogue atoms and bonds of the core.
+    Colour core blue, layer 1 r groups red, layer 2 r groups orange.
+    My father, who is very red/green colourblind, says he finds these
+    colours easy to distinguish.
     :param analogue:
     :param parent:
     :return:
     """
     core_map = []
-    r_group_ats = []
+    layer_1_ats = []
+    layer_2_ats = []
     for at in analogue.GetAtoms():
         try:
             core_map.append((at.GetIdx(), int(at.GetProp('_GL_CORE_'))))
         except KeyError:
             pass
-        if at.HasProp('_GL_R_GROUP_'):
-            r_group_ats.append(at.GetIdx())
+        if at.HasProp('_GL_R_GROUP_1_'):
+            layer_1_ats.append(at.GetIdx())
+        if at.HasProp('_GL_R_GROUP_2_'):
+            layer_2_ats.append(at.GetIdx())
+
     rdMolAlign.AlignMol(analogue, parent, atomMap=core_map)
     core_ats = [a[0] for a in core_map]
     core_bonds = bonds_between_atoms(analogue, core_ats)
-    r_group_bonds = bonds_between_atoms(analogue, r_group_ats)
+    layer_1_bonds = bonds_between_atoms(analogue, layer_1_ats)
+    layer_2_bonds = bonds_between_atoms(analogue, layer_2_ats)
 
+    # add bonds between core and r group atoms
     for ca in core_ats:
-        for rga in r_group_ats:
+        for rga in layer_1_ats:
             bond = analogue.GetBondBetweenAtoms(ca, rga)
             if bond is not None:
-                r_group_bonds.append(bond.GetIdx())
-                found_it = True
+                layer_1_bonds.append(bond.GetIdx())
+        for rga in layer_2_ats:
+            bond = analogue.GetBondBetweenAtoms(ca, rga)
+            if bond is not None:
+                layer_2_bonds.append(bond.GetIdx())
 
     core_ats_str = ' '.join([str(a + 1) for a in core_ats])
     core_bonds_str = ' '.join([str(b + 1) for b in core_bonds])
-    r_group_ats_str = ' '.join([str(a + 1) for a in r_group_ats])
-    r_group_bonds_str = ' '.join([str(b + 1) for b in r_group_bonds])
-    prop_text = f'COLOR #0000ff\nATOMS {core_ats_str}\nBONDS {core_bonds_str}' \
-                f'\nCOLOR #ff0000\nATOMS {r_group_ats_str}\nBONDS {r_group_bonds_str}'
-    # prop_text = f'COLOR #0000ff\nATOMS {r_group_ats_str}\nBONDS {r_group_bonds_str}'
+    prop_text = f'COLOR #0000ff\nATOMS {core_ats_str}\nBONDS {core_bonds_str}'
+    if layer_1_ats:
+        layer_1_ats_str = ' '.join([str(a + 1) for a in layer_1_ats])
+        layer_1_bonds_str = ' '.join([str(b + 1) for b in layer_1_bonds])
+        prop_text += f'\nCOLOR #ff0000\nATOMS {layer_1_ats_str}\nBONDS {layer_1_bonds_str}'
+    if layer_2_ats:
+        layer_2_ats_str = ' '.join([str(a + 1) for a in layer_2_ats])
+        layer_2_bonds_str = ' '.join([str(b + 1) for b in layer_2_bonds])
+        prop_text += f'\nCOLOR #ffa500\nATOMS {layer_2_ats_str}\nBONDS {layer_2_bonds_str}'
+    # prop_text = f'COLOR #0000ff\nATOMS {layer_1_ats_str}\nBONDS {layer_1_bonds_str}'
     analogue.SetProp('Renderer_Highlight', prop_text)
 
 
