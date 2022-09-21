@@ -58,7 +58,7 @@ def load_replacements_data() -> dict[str: tuple[list[str], list[str]]]:
     return substs_data
 
 
-def make_core_and_rgroups(mol: Chem.Mol, core_query: Chem.Mol) -> list[tuple[Chem.Mol, list[str]]]:
+def make_core_and_rgroups(mol: Chem.Mol, core_query: Chem.Mol) -> list[tuple[Chem.Mol, Chem.Mol, list[str]]]:
     """
     Use the core_query to do an R Group strip on mol.  That involves
     matching the core_query onto the molecule, and removing any
@@ -66,9 +66,12 @@ def make_core_and_rgroups(mol: Chem.Mol, core_query: Chem.Mol) -> list[tuple[Che
     core_query matches more than once, all possibilities are returned.
     For these purposes, we can discount symmetrical matches of the same
     atoms.
-    Returns a list of the cores as a molecule, the R Groups as SMILES
-    strings, with atom mappings set up so molzip can be used
-    conveniently.
+    Returns a list of the cores as a molecule, a copy of the parent
+    molecule and the R Groups as SMILES strings, with atom mappings set
+    up so molzip can be used conveniently.  The core and parent
+    molecules will have the atoms that matched core_query flagged with
+    property _GL_CORE_ and the sequence number of the core atom it
+    matched.  These are used in alignment and colouring later.
 
     :param mol:
     :param core_query:
@@ -77,19 +80,23 @@ def make_core_and_rgroups(mol: Chem.Mol, core_query: Chem.Mol) -> list[tuple[Che
     ret_mols = []
     matches = mol.GetSubstructMatches(core_query)
     for match in matches:
-        # take a copy so temporary markings aren't propogated
+        core_map = []
+        # take a copy so markings of core are preserved
         mol_cp = Chem.Mol(mol)
         bonds_to_go = []
         dummy_labels = []
-        for match_at in match:
+        for i, match_at in enumerate(match):
             at = mol_cp.GetAtomWithIdx(match_at)
-            at.SetProp('_GL_CORE_', f'{match_at}')
+            at.SetProp('_GL_CORE_', f'{i}')
+            core_map.append((i, at.GetIdx()))
             for bond in mol_cp.GetAtomWithIdx(match_at).GetBonds():
                 other_atom = bond.GetOtherAtomIdx(match_at)
                 if other_atom not in match:
                     btg_num = len(bonds_to_go)
                     dummy_labels.append((btg_num + 1001, btg_num + 1001))
                     bonds_to_go.append(bond.GetIdx())
+        rdDepictor.GenerateDepictionMatching2DStructure(mol_cp, core_query,
+                                                        core_map)
         frag_mol = Chem.FragmentOnBonds(mol_cp, bonds_to_go,
                                         dummyLabels=dummy_labels)
         # the fragmentation labels the dummy atoms at the break points
@@ -135,16 +142,17 @@ def make_core_and_rgroups(mol: Chem.Mol, core_query: Chem.Mol) -> list[tuple[Che
                     r_group_smis.append(smi)
 
         # If we have bidentate substituents, add them back to the core.
-        # This may generate an error "Incomplete atom labelling, cannot make bond"
-        # which is (I think) molzip complaining that not all atom mappings in
-        # frag_core have a match in bid, which is expected because we are
-        # only repairing the bidentate removal and leaving the rest of the
-        # fragmentation for the r group replacement.
+        # This may generate an error "Incomplete atom labelling,
+        # cannot make bond" which is (I think) molzip complaining that
+        # not all atom mappings in frag_core have a match in bid, which
+        # is expected because we are only repairing the bidentate
+        # removal and leaving the rest of the fragmentation for the r
+        # group replacement.
         if bidentates:
             for bid in bidentates:
                 frag_core = Chem.CombineMols(frag_core, bid)
             frag_core = Chem.molzip(frag_core)
-        ret_mols.append((frag_core, r_group_smis))
+        ret_mols.append((frag_core, mol_cp, r_group_smis))
     return ret_mols
 
 
@@ -169,24 +177,27 @@ def make_rgroup_lookup_smi(rgroup: str) -> tuple[str, int]:
     return Chem.MolToSmiles(mol), atom_map_num
 
 
-def make_mapped_rgroups(smis: list[str], atom_map_num: int, rgroup_smi: str) -> list[Chem.Mol]:
+def make_mapped_rgroups(smis: list[str], atom_map_num: int, rgroup_smi: str,
+                        layer_number: str) -> list[Chem.Mol]:
     """
     Take the SMIlES strings, create a Mol for each one and add the atom
     map num to the dummy atom.  If the SMILES for the R Group isn't the
     same as the original, flog the atoms with the property _GL_R_GROUP_
-    for subsequent coloured rendering.
+    plus layer_number for subsequent coloured rendering.
     :param smis:
     :param atom_map_num:
     :param rgroup_smi:
+    :param layer_number:
     :return:
     """
     ret_mols = []
+    prop_name = '_GL_R_GROUP_' + layer_number + '_'
     for smi in smis:
         map_smi = smi.replace('*', f'[*:{atom_map_num}]')
         frag_mol = Chem.MolFromSmiles(map_smi)
         if smi != rgroup_smi:
             for at in frag_mol.GetAtoms():
-                at.SetProp('_GL_R_GROUP_', f'{at.GetIdx()}')
+                at.SetProp(prop_name, f'{at.GetIdx()}')
         ret_mols.append(frag_mol)
 
     return ret_mols
@@ -219,45 +230,59 @@ def make_rgroups_for_substs(rgroup_smi: str, atom_map_num: int,
         except KeyError:
             layer1_smis = [rgroup_smi]
         layer1_mols = make_mapped_rgroups(layer1_smis, atom_map_num,
-                                          rgroup_smi)
+                                          rgroup_smi, '1')
     if use_layer2:
         try:
             layer2_smis = substs_data[rgroup_smi][1]
         except KeyError:
             layer2_smis = [rgroup_smi]
         layer2_mols = make_mapped_rgroups(layer2_smis, atom_map_num,
-                                          rgroup_smi)
+                                          rgroup_smi, '2')
 
     return layer1_mols, layer2_mols
 
 
 def make_analogues(core_and_rgroups: list[tuple[Chem.Mol, list[str]]],
                    substs_data: dict[str: tuple[list[str], list[str]]],
-                   use_layer1: bool, use_layer2: bool) -> list[Chem.Mol]:
+                   use_layer1: bool, use_layer2: bool,
+                   include_orig_rgroup: bool) -> list[Chem.Mol, Chem.Mol]:
     """
     Take the list of core and r groups for the molecule, and make
     analogues of each using the relevant replacement in substs_data.
+    If include_orig_rgroup is True, the substitutions at each point
+    will include the original R Group, so that combinations are
+    produced that include no change at a position.  The case where
+    none of the R Groups changed so the original molecule is
+    returned will be weeded out later.
+    Returns a list of tuples, with the analogue and its parent.  Two
+    analogues can have the same parent structure, but be based on
+    different matches of the core onto the parent, and hence different
+    parent structures - the difference being what's in the _GL_CORE_
+    properties on the matching atoms.
     :param core_and_rgroups:
     :param substs_data:
     :param use_layer1:
     :param usr_layer2:
+    :param include_orig_rgroup:
     :return:
     """
     analogues = []
-    for core, rgroups in core_and_rgroups:
+    for core, parent, rgroups in core_and_rgroups:
         rgroup_repls = []
         for rgroup in rgroups:
             rgroup_lookup, atom_map_num = make_rgroup_lookup_smi(rgroup)
             layer1_mols, layer2_mols = \
                 make_rgroups_for_substs(rgroup_lookup, atom_map_num,
                                         substs_data, use_layer1, use_layer2)
+            if include_orig_rgroup:
+                layer1_mols.append(Chem.MolFromSmiles(rgroup))
             rgroup_repls.append(layer1_mols + layer2_mols)
         for substs in product(*rgroup_repls):
             analogue = Chem.Mol(core)
             for s in substs:
                 analogue = Chem.CombineMols(analogue, s)
             analogue = Chem.molzip(analogue)
-            analogues.append(analogue)
+            analogues.append((analogue, parent))
 
     return analogues
 
@@ -277,49 +302,71 @@ def bonds_between_atoms(mol: Chem.Mol, atoms: list[int]) -> list[int]:
     return bonds
 
 
-def align_analogue_to_parent(analogue: Chem.Mol, parent: Chem.Mol) -> None:
+def align_analogue_to_core(analogue: Chem.Mol, core_query: Chem.Mol) -> None:
     """
     Use the information in atom props _GL_CORE_ to align the analogue
     so that corresponding atoms are on top of the parent, and also
-    highlight the analogue atoms and bonds of the core.
+    highlight the analogue atoms and bonds of the core.  The parent
+    is altered to match query_mol, so everything lines up from parent
+    to parent and analogue to analogue.
+    Colour core blue, layer 1 r groups red, layer 2 r groups orange.
+    My father, who is very red/green colourblind, says he finds these
+    colours easy to distinguish.
     :param analogue:
     :param parent:
+    :param query_mol
     :return:
     """
     core_map = []
-    r_group_ats = []
+    layer_1_ats = []
+    layer_2_ats = []
     for at in analogue.GetAtoms():
         try:
-            core_map.append((at.GetIdx(), int(at.GetProp('_GL_CORE_'))))
+            core_map.append((int(at.GetProp('_GL_CORE_')), at.GetIdx()))
         except KeyError:
             pass
-        if at.HasProp('_GL_R_GROUP_'):
-            r_group_ats.append(at.GetIdx())
-    rdMolAlign.AlignMol(analogue, parent, atomMap=core_map)
-    core_ats = [a[0] for a in core_map]
+        if at.HasProp('_GL_R_GROUP_1_'):
+            layer_1_ats.append(at.GetIdx())
+        if at.HasProp('_GL_R_GROUP_2_'):
+            layer_2_ats.append(at.GetIdx())
+    rdDepictor.GenerateDepictionMatching2DStructure(analogue, core_query,
+                                                    atomMap=core_map)
+    core_map.sort(key=lambda p: p[0])
+    core_ats = [a[1] for a in core_map]
     core_bonds = bonds_between_atoms(analogue, core_ats)
-    r_group_bonds = bonds_between_atoms(analogue, r_group_ats)
+    layer_1_bonds = bonds_between_atoms(analogue, layer_1_ats)
+    layer_2_bonds = bonds_between_atoms(analogue, layer_2_ats)
 
+    # add bonds between core and r group atoms
     for ca in core_ats:
-        for rga in r_group_ats:
+        for rga in layer_1_ats:
             bond = analogue.GetBondBetweenAtoms(ca, rga)
             if bond is not None:
-                r_group_bonds.append(bond.GetIdx())
-                found_it = True
+                layer_1_bonds.append(bond.GetIdx())
+        for rga in layer_2_ats:
+            bond = analogue.GetBondBetweenAtoms(ca, rga)
+            if bond is not None:
+                layer_2_bonds.append(bond.GetIdx())
 
     core_ats_str = ' '.join([str(a + 1) for a in core_ats])
     core_bonds_str = ' '.join([str(b + 1) for b in core_bonds])
-    r_group_ats_str = ' '.join([str(a + 1) for a in r_group_ats])
-    r_group_bonds_str = ' '.join([str(b + 1) for b in r_group_bonds])
-    prop_text = f'COLOR #0000ff\nATOMS {core_ats_str}\nBONDS {core_bonds_str}' \
-                f'\nCOLOR #ff0000\nATOMS {r_group_ats_str}\nBONDS {r_group_bonds_str}'
-    # prop_text = f'COLOR #0000ff\nATOMS {r_group_ats_str}\nBONDS {r_group_bonds_str}'
+    prop_text = f'COLOR #0000ff\nATOMS {core_ats_str}\nBONDS {core_bonds_str}'
+    if layer_1_ats:
+        layer_1_ats_str = ' '.join([str(a + 1) for a in layer_1_ats])
+        layer_1_bonds_str = ' '.join([str(b + 1) for b in layer_1_bonds])
+        prop_text += f'\nCOLOR #ff0000\nATOMS {layer_1_ats_str}\nBONDS {layer_1_bonds_str}'
+    if layer_2_ats:
+        layer_2_ats_str = ' '.join([str(a + 1) for a in layer_2_ats])
+        layer_2_bonds_str = ' '.join([str(b + 1) for b in layer_2_bonds])
+        prop_text += f'\nCOLOR #ffbf00\nATOMS {layer_2_ats_str}\nBONDS {layer_2_bonds_str}'
+    # prop_text = f'COLOR #0000ff\nATOMS {layer_1_ats_str}\nBONDS {layer_1_bonds_str}'
     analogue.SetProp('Renderer_Highlight', prop_text)
 
 
 def replace_rgroups(mols: list[Chem.Mol], ids: list[Any],
                     id_type: DataType, core_query: Chem.Mol,
                     use_layer1: bool, use_layer2: bool,
+                    include_orig_rgroup: bool,
                     input_column_name: str) -> tuple[TableData, list[int]]:
     """
     Take the list of molecules, use the core_query to define R Groups
@@ -335,10 +382,16 @@ def replace_rgroups(mols: list[Chem.Mol], ids: list[Any],
                        that do will produce analogues (Chem.Mol).
     :param use_layer1: Use the layer 1 replacements in the table (bool)
     :param use_layer2: Use the layer 1 replacements in the table (bool)
+    :param include_orig_rgroup: include the original R Group in the
+                                substitution list i.e. include products
+                                with no change at each position.
     :param input_column_name: (str)
     :return: The table of analogues (TableData)
     """
     substs_data = load_replacements_data()
+
+    rdDepictor.SetPreferCoordGen(True)
+    rdDepictor.Compute2DCoords(core_query)
 
     all_analogues = []
     analogue_parents = []
@@ -353,12 +406,13 @@ def replace_rgroups(mols: list[Chem.Mol], ids: list[Any],
             rdDepictor.Compute2DCoords(mol)
             core_and_rgroups = make_core_and_rgroups(mol, core_query)
             analogues = make_analogues(core_and_rgroups, substs_data,
-                                       use_layer1, use_layer2)
+                                       use_layer1, use_layer2,
+                                       include_orig_rgroup)
             parent_smi = Chem.MolToSmiles(mol)
             for analogue in analogues:
-                if Chem.MolToSmiles(analogue) != parent_smi:
-                    all_analogues.append(analogue)
-                    analogue_parents.append(mol)
+                if Chem.MolToSmiles(analogue[0]) != parent_smi:
+                    all_analogues.append(analogue[0])
+                    analogue_parents.append(analogue[1])
                     analogue_parent_ids.append(id)
 
     analogue_smiles = defaultdict(int)
@@ -369,12 +423,12 @@ def replace_rgroups(mols: list[Chem.Mol], ids: list[Any],
     for analogue, parent, parent_id in zip(all_analogues, analogue_parents, analogue_parent_ids):
         smi = Chem.MolToSmiles(analogue)
         if not analogue_smiles[smi] and smi not in input_smiles_set:
-            align_analogue_to_parent(analogue, parent)
+            align_analogue_to_core(analogue, core_query)
             final_analogues.append(analogue)
-            rdDepictor.Compute2DCoords(analogue)
             final_parents.append(parent)
             final_parent_ids.append(parent_id)
             analogue_count[parent_id] += 1
+
         analogue_smiles[smi] += 1
 
     table_name = f'Analogues of {input_column_name}'
@@ -400,11 +454,13 @@ class RGroupReplacement(DataFunction):
         ids = id_column.values
 
         core_query = input_field_to_molecule(request, 'coreSketcher')
+
         use_layer1 = boolean_input_field(request, 'useLayer1')
         use_layer2 = boolean_input_field(request, 'useLayer2')
+        include_orig_rgroup = boolean_input_field(request, 'incOrigRGroups')
         analogues_table, analogue_count_col_vals =\
             replace_rgroups(mols, ids, id_column.dataType, core_query, use_layer1,
-                            use_layer2, input_column.name)
+                            use_layer2, include_orig_rgroup, input_column.name)
         analogue_count_col = ColumnData(name=f'Num R Group Subs {input_column.name}',
                                         dataType=DataType.INTEGER,
                                         values=analogue_count_col_vals)
