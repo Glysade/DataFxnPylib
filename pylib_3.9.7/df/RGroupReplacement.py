@@ -236,14 +236,21 @@ def make_rgroups_for_substs(rgroup_smi: str, atom_map_num: int,
 
 def make_analogues(core_and_rgroups: list[tuple[Chem.Mol, list[str]]],
                    substs_data: dict[str: tuple[list[str], list[str]]],
-                   use_layer1: bool, use_layer2: bool) -> list[Chem.Mol]:
+                   use_layer1: bool, use_layer2: bool,
+                   include_orig_rgroup: bool) -> list[Chem.Mol]:
     """
     Take the list of core and r groups for the molecule, and make
     analogues of each using the relevant replacement in substs_data.
+    If include_orig_rgroup is True, the substitutions at each point
+    will include the original R Group, so that combinations are
+    produced that include no change at a position.  The case where
+    none of the R Groups changed so the original molecule is
+    returned will be weeded out later.
     :param core_and_rgroups:
     :param substs_data:
     :param use_layer1:
     :param usr_layer2:
+    :param include_orig_rgroup:
     :return:
     """
     analogues = []
@@ -254,6 +261,8 @@ def make_analogues(core_and_rgroups: list[tuple[Chem.Mol, list[str]]],
             layer1_mols, layer2_mols = \
                 make_rgroups_for_substs(rgroup_lookup, atom_map_num,
                                         substs_data, use_layer1, use_layer2)
+            if include_orig_rgroup:
+                layer1_mols.append(Chem.MolFromSmiles(rgroup))
             rgroup_repls.append(layer1_mols + layer2_mols)
         for substs in product(*rgroup_repls):
             analogue = Chem.Mol(core)
@@ -340,6 +349,7 @@ def align_analogue_to_parent(analogue: Chem.Mol, parent: Chem.Mol) -> None:
 def replace_rgroups(mols: list[Chem.Mol], ids: list[Any],
                     id_type: DataType, core_query: Chem.Mol,
                     use_layer1: bool, use_layer2: bool,
+                    include_orig_rgroup: bool,
                     input_column_name: str) -> tuple[TableData, list[int]]:
     """
     Take the list of molecules, use the core_query to define R Groups
@@ -355,6 +365,9 @@ def replace_rgroups(mols: list[Chem.Mol], ids: list[Any],
                        that do will produce analogues (Chem.Mol).
     :param use_layer1: Use the layer 1 replacements in the table (bool)
     :param use_layer2: Use the layer 1 replacements in the table (bool)
+    :param include_orig_rgroup: include the original R Group in the
+                                substitution list i.e. include products
+                                with no change at each position.
     :param input_column_name: (str)
     :return: The table of analogues (TableData)
     """
@@ -373,7 +386,8 @@ def replace_rgroups(mols: list[Chem.Mol], ids: list[Any],
             rdDepictor.Compute2DCoords(mol)
             core_and_rgroups = make_core_and_rgroups(mol, core_query)
             analogues = make_analogues(core_and_rgroups, substs_data,
-                                       use_layer1, use_layer2)
+                                       use_layer1, use_layer2,
+                                       include_orig_rgroup)
             parent_smi = Chem.MolToSmiles(mol)
             for analogue in analogues:
                 if Chem.MolToSmiles(analogue) != parent_smi:
@@ -422,9 +436,10 @@ class RGroupReplacement(DataFunction):
         core_query = input_field_to_molecule(request, 'coreSketcher')
         use_layer1 = boolean_input_field(request, 'useLayer1')
         use_layer2 = boolean_input_field(request, 'useLayer2')
+        include_orig_rgroup = boolean_input_field(request, 'incOrigRGroups')
         analogues_table, analogue_count_col_vals =\
             replace_rgroups(mols, ids, id_column.dataType, core_query, use_layer1,
-                            use_layer2, input_column.name)
+                            use_layer2, include_orig_rgroup, input_column.name)
         analogue_count_col = ColumnData(name=f'Num R Group Subs {input_column.name}',
                                         dataType=DataType.INTEGER,
                                         values=analogue_count_col_vals)
