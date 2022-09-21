@@ -331,11 +331,7 @@ def align_analogue_to_core(analogue: Chem.Mol, core_query: Chem.Mol) -> None:
             layer_2_ats.append(at.GetIdx())
     rdDepictor.GenerateDepictionMatching2DStructure(analogue, core_query,
                                                     atomMap=core_map)
-
-    rev_core_map = [(c[1], c[0]) for c in core_map]
-    # rdMolAlign.AlignMol(analogue, core_query, atomMap=rev_core_map)
-    rms = rdMolAlign.CalcRMS(analogue, core_query, map=[rev_core_map])
-    print(f'rms = {rms}')
+    core_map.sort(key=lambda p: p[0])
     core_ats = [a[1] for a in core_map]
     core_bonds = bonds_between_atoms(analogue, core_ats)
     layer_1_bonds = bonds_between_atoms(analogue, layer_1_ats)
@@ -394,6 +390,9 @@ def replace_rgroups(mols: list[Chem.Mol], ids: list[Any],
     """
     substs_data = load_replacements_data()
 
+    rdDepictor.SetPreferCoordGen(True)
+    rdDepictor.Compute2DCoords(core_query)
+
     all_analogues = []
     analogue_parents = []
     analogue_parent_ids = []
@@ -421,19 +420,14 @@ def replace_rgroups(mols: list[Chem.Mol], ids: list[Any],
     final_parents = []
     final_parent_ids = []
     input_smiles_set = set(input_smiles)
-    i = 1
     for analogue, parent, parent_id in zip(all_analogues, analogue_parents, analogue_parent_ids):
         smi = Chem.MolToSmiles(analogue)
         if not analogue_smiles[smi] and smi not in input_smiles_set:
-            print(i, parent_id)
             align_analogue_to_core(analogue, core_query)
             final_analogues.append(analogue)
             final_parents.append(parent)
             final_parent_ids.append(parent_id)
             analogue_count[parent_id] += 1
-            if i < 3 or (i > 136 and i < 140):
-                print(Chem.MolToMolBlock(analogue))
-            i += 1
 
         analogue_smiles[smi] += 1
 
@@ -460,8 +454,6 @@ class RGroupReplacement(DataFunction):
         ids = id_column.values
 
         core_query = input_field_to_molecule(request, 'coreSketcher')
-        rdDepictor.SetPreferCoordGen(True)
-        rdDepictor.Compute2DCoords(core_query)
 
         use_layer1 = boolean_input_field(request, 'useLayer1')
         use_layer2 = boolean_input_field(request, 'useLayer2')
