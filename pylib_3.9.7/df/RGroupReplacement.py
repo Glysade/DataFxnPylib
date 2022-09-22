@@ -390,7 +390,7 @@ def replace_rgroups(mols: list[Chem.Mol], ids: list[Any],
     """
     substs_data = load_replacements_data()
 
-    rdDepictor.SetPreferCoordGen(False)
+    rdDepictor.SetPreferCoordGen(True)
     rdDepictor.Compute2DCoords(core_query)
 
     all_analogues = []
