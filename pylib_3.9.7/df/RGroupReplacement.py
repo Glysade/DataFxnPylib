@@ -3,17 +3,17 @@ from collections import defaultdict
 from itertools import product
 from json import load
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from rdkit import Chem
-from rdkit.Chem import rdDepictor, rdMolAlign
+from rdkit.Chem import rdDepictor, rdmolops
 from rdkit.Chem.rdchem import MolSanitizeException
 
 from df.chem_helper import column_to_molecules, input_field_to_molecule, \
     molecules_to_column
 from df.data_transfer import DataFunction, DataFunctionRequest, \
     DataFunctionResponse, ColumnData, DataType, \
-    TableData, boolean_input_field, string_input_field
+    TableData, boolean_input_field, string_input_field, string_list_input_field
 
 
 def load_replacements_data() -> dict[str: tuple[list[str], list[str]]]:
@@ -156,24 +156,23 @@ def make_core_and_rgroups(mol: Chem.Mol, core_query: Chem.Mol) -> list[tuple[Che
     return ret_mols
 
 
-def make_rgroup_lookup_smi(rgroup: str) -> tuple[str, int]:
+def make_rgroup_lookup_smi(mol: Chem.Mol) -> tuple[str, int]:
     """
-    Take the R Group SMILES that is expected to have an atom mapping
-    on the dummy atom, and return a new SMILES with the atom mapping
-    removed and the atom mapping number.  There should be only 1
-    atom mapping (we're not dealing with substituents that attached
-    twice).
-    :param rgroup:
-    :return:
+    Take the RGroup, which is expected to have atom mappings on the
+    dummy atoms, and return a new SMILES with the first atom mapping
+    removed and its atom map number.  There will sometimes
+    be polydentate RGroups which won't have a replacement in the table
+    so don't need to be handled - it's fine if they are left with
+    dangling atom maps as they will be placed straight back onto the
+    core.
+
     """
-    mol = Chem.MolFromSmiles(rgroup)
     atom_map_num = 0
     for atom in mol.GetAtoms():
         if atom.GetAtomicNum() == 0:
             atom_map_num = atom.GetAtomMapNum()
             atom.SetAtomMapNum(0)
             break
-
     return Chem.MolToSmiles(mol), atom_map_num
 
 
@@ -443,27 +442,182 @@ def replace_rgroups(mols: list[Chem.Mol], ids: list[Any],
                                                     analogue_col]), analogue_count_col
 
 
+def isotopes_to_atommaps(mol: Chem.Mol) -> Optional[Chem.Mol]:
+    """
+    Take the molecule and return a copy with all the isotope-labelled
+    dummy atoms replaced by atom-mapped dummy atoms of 0 isotope.
+    """
+    if mol is None:
+        return None
+
+    mol_cp = Chem.Mol(mol)
+    for at in mol_cp.GetAtoms():
+        if at.GetAtomicNum() == 0:
+            at.SetAtomMapNum(at.GetIsotope())
+            at.SetIsotope(0)
+    return mol_cp
+
+
+def build_analogues(core: Chem.Mol, rgroup_line: list[Chem.Mol],
+                    substs_data: dict[str: tuple[list[str], list[str]]],
+                    use_layer1: bool, use_layer2: bool,
+                    include_orig_rgroup:bool) -> list[Chem.Mol]:
+    """
+    Build all the analogues for a single core and set of R Groups.
+    Returns a list of unique molecules.
+    """
+    # The core and rgroups come in with the attachment points as dummy
+    # atoms with isotope labels.  For historical reasons it's easier if
+    # these are replaced by atom maps
+    new_core = isotopes_to_atommaps(core)
+    new_rgroups = [isotopes_to_atommaps(rg) for rg in rgroup_line]
+    analogues = []
+    rgroup_repls = []
+    for rgroup in new_rgroups:
+        if rgroup is None:
+            continue
+        rgroup_lookup, atom_map_num = make_rgroup_lookup_smi(rgroup)
+        layer1_mols, layer2_mols = \
+            make_rgroups_for_substs(rgroup_lookup, atom_map_num,
+                                    substs_data, use_layer1, use_layer2)
+        # If there are no replacements for the R Group, set it up so
+        # it will go straight back on.
+        if include_orig_rgroup or (not layer1_mols and not layer2_mols):
+            layer1_mols.append(Chem.MolFromSmiles(rgroup))
+        rgroup_repls.append(layer1_mols + layer2_mols)
+
+    for substs in product(*rgroup_repls):
+        analogue = Chem.Mol(new_core)
+        for s in substs:
+            analogue = Chem.CombineMols(analogue, s)
+        # Note that if an RGroup was an H (rgroup_lookup = *[H]),
+        # molzip will complain but will do things correctly. Look out
+        # for
+        # WARNING: not removing hydrogen atom with dummy atom neighbors
+        analogue = rdmolops.RemoveHs(Chem.molzip(analogue))
+        analogues.append(analogue)
+        print(f'analogue : {Chem.MolToSmiles(analogue)}')
+
+    return analogues
+
+
+def build_all_analogues(parent_mols: list[Chem.Mol], parent_ids: list[Any],
+                        cores: list[Chem.Mol], rgroups: list[list[Chem.Mol]],
+                        id_type: DataType, use_layer1: bool, use_layer2: bool,
+                        include_orig_rgroup: bool,
+                        input_column_name: str) -> tuple[TableData, ColumnData]:
+    """
+    Takes a set of cores and RGroups and makes all possible
+    substitutions for each R Group using the substitution table and
+    the appropriate layers.  Each list (outer list for rgroups) should
+    be the same length and the same index in each corresponds to the
+    same input mol.
+    Returns a new table with the analogues, and a column to be added to
+    the original table giving the number of analogues each parent
+    produced. Analogues that are the same as any parent aren't returned
+    and if a parent produces no analogues, nothing is added to the
+    output table for it.
+    The analogues are aligned with the core and colour coded to show
+    the core and substititions.
+    :param parent_mols:
+    :param parent_ids:
+    :param cores:
+    :param rgroups:
+    :param use_layer1: Use the layer 1 replacements in the table (bool)
+    :param use_layer2: Use the layer 1 replacements in the table (bool)
+    :param include_orig_rgroup: include the original R Group in the
+                                substitution list i.e. include products
+                                with no change at each position.
+    :param input_column_name: (str)
+    :return: The table of analogues (TableData) and a column
+    (ColumnData) to be added to the original column.
+    """
+    substs_data = load_replacements_data()
+
+    rdDepictor.SetPreferCoordGen(True)
+
+    all_analogues_by_smi = {}
+    all_analogues = []
+    analogue_counts = defaultdict(int)
+
+    parent_smis = set([Chem.MolToSmiles(pm) for pm in parent_mols])
+    parents_dict = {}
+    for parent, parent_id, core, rgroup_line in \
+            zip(parent_mols, parent_ids, cores, rgroups):
+        print(f'Doing {parent_id} : {Chem.MolToSmiles(parent)} : {Chem.MolToSmiles(core)}')
+        parents_dict[parent_id] = parent
+        analogues = build_analogues(core, rgroup_line, substs_data, use_layer1,
+                                    use_layer2, include_orig_rgroup)
+        for an in analogues:
+            an_smi = Chem.MolToSmiles(an)
+            if an_smi not in parent_smis and an_smi not in all_analogues_by_smi:
+                all_analogues_by_smi[an_smi] = (parent_id, an)
+                analogue_counts[parent_id] += 1
+                all_analogues.append((an, parent_id))
+
+    analogue_count_vals = [analogue_counts[id] for id in parent_ids]
+    analogue_count_col = ColumnData(name=f'Num R Group Subs {input_column_name}',
+                                    dataType=DataType.INTEGER,
+                                    values=analogue_count_vals)
+
+    analogue_parents = []
+    analogue_parent_ids = []
+    analogue_col_vals = []
+    for an_smi, (parent_id, analogue) in all_analogues_by_smi.items():
+        print(f'final analogue of {parent_id} : {an_smi}')
+        analogue_parents.append(parents_dict[parent_id])
+        analogue_parent_ids.append(parent_id)
+        analogue_col_vals.append(analogue)
+
+    parent_col = molecules_to_column(analogue_parents,
+                                     f'Parent {input_column_name}',
+                                     DataType.BINARY)
+    parent_ids_col = ColumnData(name='Parent IDs', dataType=id_type,
+                                values=analogue_parent_ids)
+    analogue_col = molecules_to_column(analogue_col_vals, 'Analogues',
+                                       DataType.BINARY)
+
+    table_name = f'Analogues of {input_column_name}'
+    table_data = TableData(tableName=table_name,
+                           columns=[parent_col, parent_ids_col, analogue_col])
+
+    return table_data, analogue_count_col
+
+
 class RGroupReplacement(DataFunction):
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         column_id = string_input_field(request, 'structureColumn')
         input_column = request.inputColumns[column_id]
+        parent_mols = column_to_molecules(input_column)
         column_id = string_input_field(request, 'idColumn')
-        mols = column_to_molecules(input_column)
         id_column = request.inputColumns[column_id]
-        ids = id_column.values
+        parent_ids = id_column.values
 
-        core_query = input_field_to_molecule(request, 'coreSketcher')
+        cores_column_id = string_input_field(request, 'coresColumn')
+        cores_column = request.inputColumns[cores_column_id]
+        cores = column_to_molecules(cores_column)
+        for core in cores:
+            print(Chem.MolToSmiles(core))
+
+        rgroup_column_ids = string_list_input_field(request, 'rGroupColumns')
+        print(rgroup_column_ids)
+        rgroups = []
+        for rgroup_col_id in rgroup_column_ids:
+            rgroup_col = request.inputColumns[rgroup_col_id]
+            rgroups.append(column_to_molecules(rgroup_col))
+
+        # pivot the R Group columns so that each row is the R Groups for an
+        # input molecule, core
+        rgroup_lines = list(zip(*rgroups))
 
         use_layer1 = boolean_input_field(request, 'useLayer1')
         use_layer2 = boolean_input_field(request, 'useLayer2')
         include_orig_rgroup = boolean_input_field(request, 'incOrigRGroups')
-        analogues_table, analogue_count_col_vals =\
-            replace_rgroups(mols, ids, id_column.dataType, core_query, use_layer1,
-                            use_layer2, include_orig_rgroup, input_column.name)
-        analogue_count_col = ColumnData(name=f'Num R Group Subs {input_column.name}',
-                                        dataType=DataType.INTEGER,
-                                        values=analogue_count_col_vals)
+        analogues_table, analogue_count_col =\
+            build_all_analogues(parent_mols, parent_ids, cores, rgroup_lines,
+                                id_column.dataType, use_layer1, use_layer2,
+                                include_orig_rgroup, input_column.name)
         response = DataFunctionResponse(outputTables=[analogues_table],
                                         outputColumns=[analogue_count_col])
         return response
