@@ -316,10 +316,12 @@ def align_analogue_to_core(analogue: Chem.Mol, core_query: Chem.Mol) -> None:
     :param query_mol
     :return:
     """
+    print(f'align {Chem.MolToSmiles(analogue)} to {Chem.MolToSmiles(core_query)}')
     core_map = []
     layer_1_ats = []
     layer_2_ats = []
     for at in analogue.GetAtoms():
+        print(f'at props : {at.GetIdx()} : {at.GetPropsAsDict()}')
         try:
             core_map.append((int(at.GetProp('_GL_CORE_')), at.GetIdx()))
         except KeyError:
@@ -328,8 +330,10 @@ def align_analogue_to_core(analogue: Chem.Mol, core_query: Chem.Mol) -> None:
             layer_1_ats.append(at.GetIdx())
         if at.HasProp('_GL_R_GROUP_2_'):
             layer_2_ats.append(at.GetIdx())
+    print(f'core-map : {core_map}')
     rdDepictor.GenerateDepictionMatching2DStructure(analogue, core_query,
                                                     atomMap=core_map)
+    print('made depiction')
     core_map.sort(key=lambda p: p[0])
     core_ats = [a[1] for a in core_map]
     core_bonds = bonds_between_atoms(analogue, core_ats)
@@ -360,6 +364,7 @@ def align_analogue_to_core(analogue: Chem.Mol, core_query: Chem.Mol) -> None:
         prop_text += f'\nCOLOR #ffbf00\nATOMS {layer_2_ats_str}\nBONDS {layer_2_bonds_str}'
     # prop_text = f'COLOR #0000ff\nATOMS {layer_1_ats_str}\nBONDS {layer_1_bonds_str}'
     analogue.SetProp('Renderer_Highlight', prop_text)
+    print(f'prop_text : {prop_text}')
 
 
 def replace_rgroups(mols: list[Chem.Mol], ids: list[Any],
@@ -488,6 +493,8 @@ def build_analogues(core: Chem.Mol, rgroup_line: list[Chem.Mol],
 
     for substs in product(*rgroup_repls):
         analogue = Chem.Mol(new_core)
+        for i, anat in enumerate(analogue.GetAtoms()):
+            anat.SetProp('_GL_CORE_', str(i))
         for s in substs:
             analogue = Chem.CombineMols(analogue, s)
         # Note that if an RGroup was an H (rgroup_lookup = *[H]),
@@ -551,6 +558,7 @@ def build_all_analogues(parent_mols: list[Chem.Mol], parent_ids: list[Any],
         for an in analogues:
             an_smi = Chem.MolToSmiles(an)
             if an_smi not in parent_smis and an_smi not in all_analogues_by_smi:
+                align_analogue_to_core(an, core)
                 all_analogues_by_smi[an_smi] = (parent_id, an)
                 analogue_counts[parent_id] += 1
                 all_analogues.append((an, parent_id))
