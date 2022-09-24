@@ -593,6 +593,7 @@ class RGroupReplacement(DataFunction):
         column_id = string_input_field(request, 'idColumn')
         id_column = request.inputColumns[column_id]
         parent_ids = id_column.values
+        ids_type = id_column.dataType
 
         cores_column_id = string_input_field(request, 'coresColumn')
         cores_column = request.inputColumns[cores_column_id]
@@ -616,7 +617,7 @@ class RGroupReplacement(DataFunction):
         include_orig_rgroup = boolean_input_field(request, 'incOrigRGroups')
         analogues_table, analogue_count_col =\
             build_all_analogues(parent_mols, parent_ids, cores, rgroup_lines,
-                                id_column.dataType, use_layer1, use_layer2,
+                                ids_type, use_layer1, use_layer2,
                                 include_orig_rgroup, input_column.name)
         response = DataFunctionResponse(outputTables=[analogues_table],
                                         outputColumns=[analogue_count_col])
