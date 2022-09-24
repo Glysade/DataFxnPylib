@@ -353,15 +353,15 @@ def align_analogue_to_core(analogue: Chem.Mol, core_query: Chem.Mol) -> None:
 
     core_ats_str = ' '.join([str(a + 1) for a in core_ats])
     core_bonds_str = ' '.join([str(b + 1) for b in core_bonds])
-    prop_text = f'COLOR #0000ff\nATOMS {core_ats_str}\nBONDS {core_bonds_str}'
+    prop_text = f'COLOR #00bfff\nATOMS\nBONDS {core_bonds_str}'
     if layer_1_ats:
         layer_1_ats_str = ' '.join([str(a + 1) for a in layer_1_ats])
         layer_1_bonds_str = ' '.join([str(b + 1) for b in layer_1_bonds])
-        prop_text += f'\nCOLOR #ff0000\nATOMS {layer_1_ats_str}\nBONDS {layer_1_bonds_str}'
+        prop_text += f'\nCOLOR #dc143c\nATOMS\nBONDS {layer_1_bonds_str}'
     if layer_2_ats:
         layer_2_ats_str = ' '.join([str(a + 1) for a in layer_2_ats])
         layer_2_bonds_str = ' '.join([str(b + 1) for b in layer_2_bonds])
-        prop_text += f'\nCOLOR #ffbf00\nATOMS {layer_2_ats_str}\nBONDS {layer_2_bonds_str}'
+        prop_text += f'\nCOLOR #ffbf00\nATOMS\nBONDS {layer_2_bonds_str}'
     # prop_text = f'COLOR #0000ff\nATOMS {layer_1_ats_str}\nBONDS {layer_1_bonds_str}'
     analogue.SetProp('Renderer_Highlight', prop_text)
     print(f'prop_text : {prop_text}')
