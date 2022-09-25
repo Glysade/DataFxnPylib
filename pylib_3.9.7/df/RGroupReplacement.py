@@ -544,7 +544,13 @@ def build_all_analogues(parent_mols: list[Chem.Mol], parent_ids: list[Any],
     parents_dict = {}
     for parent, parent_id, core, rgroup_line in \
             zip(parent_mols, parent_ids, cores, rgroups):
-        parents_dict[parent_id] = parent
+        # Build the parent back up from the core and original R Groups,
+        # so it can be aligned and the core coloured for easy
+        # comparison to the analogues.
+        new_parent = build_analogues(core, rgroup_line, substs_data, False, False,
+                                     True)
+        align_analogue_to_core(new_parent[0], core)
+        parents_dict[parent_id] = new_parent[0]
         analogues = build_analogues(core, rgroup_line, substs_data, use_layer1,
                                     use_layer2, include_orig_rgroup)
         for an in analogues:
