@@ -316,12 +316,10 @@ def align_analogue_to_core(analogue: Chem.Mol, core_query: Chem.Mol) -> None:
     :param query_mol
     :return:
     """
-    print(f'align {Chem.MolToSmiles(analogue)} to {Chem.MolToSmiles(core_query)}')
     core_map = []
     layer_1_ats = []
     layer_2_ats = []
     for at in analogue.GetAtoms():
-        print(f'at props : {at.GetIdx()} : {at.GetPropsAsDict()}')
         try:
             core_map.append((int(at.GetProp('_GL_CORE_')), at.GetIdx()))
         except KeyError:
@@ -330,10 +328,8 @@ def align_analogue_to_core(analogue: Chem.Mol, core_query: Chem.Mol) -> None:
             layer_1_ats.append(at.GetIdx())
         if at.HasProp('_GL_R_GROUP_2_'):
             layer_2_ats.append(at.GetIdx())
-    print(f'core-map : {core_map}')
     rdDepictor.GenerateDepictionMatching2DStructure(analogue, core_query,
                                                     atomMap=core_map)
-    print('made depiction')
     core_map.sort(key=lambda p: p[0])
     core_ats = [a[1] for a in core_map]
     core_bonds = bonds_between_atoms(analogue, core_ats)
@@ -351,20 +347,15 @@ def align_analogue_to_core(analogue: Chem.Mol, core_query: Chem.Mol) -> None:
             if bond is not None:
                 layer_2_bonds.append(bond.GetIdx())
 
-    core_ats_str = ' '.join([str(a + 1) for a in core_ats])
     core_bonds_str = ' '.join([str(b + 1) for b in core_bonds])
     prop_text = f'COLOR #00bfff\nATOMS\nBONDS {core_bonds_str}'
     if layer_1_ats:
-        layer_1_ats_str = ' '.join([str(a + 1) for a in layer_1_ats])
         layer_1_bonds_str = ' '.join([str(b + 1) for b in layer_1_bonds])
         prop_text += f'\nCOLOR #dc143c\nATOMS\nBONDS {layer_1_bonds_str}'
     if layer_2_ats:
-        layer_2_ats_str = ' '.join([str(a + 1) for a in layer_2_ats])
         layer_2_bonds_str = ' '.join([str(b + 1) for b in layer_2_bonds])
         prop_text += f'\nCOLOR #ffbf00\nATOMS\nBONDS {layer_2_bonds_str}'
-    # prop_text = f'COLOR #0000ff\nATOMS {layer_1_ats_str}\nBONDS {layer_1_bonds_str}'
     analogue.SetProp('Renderer_Highlight', prop_text)
-    print(f'prop_text : {prop_text}')
 
 
 def replace_rgroups(mols: list[Chem.Mol], ids: list[Any],
@@ -486,9 +477,12 @@ def build_analogues(core: Chem.Mol, rgroup_line: list[Chem.Mol],
             make_rgroups_for_substs(rgroup_lookup, atom_map_num,
                                     substs_data, use_layer1, use_layer2)
         # If there are no replacements for the R Group, set it up so
-        # it will go straight back on.
+        # it will go straight back on.  Use a layer number of 0 so it
+        # isn't highlighted.
         if include_orig_rgroup or (not layer1_mols and not layer2_mols):
-            layer1_mols.append(Chem.MolFromSmiles(rgroup))
+            orig_rgroup = make_mapped_rgroups([Chem.MolToSmiles(rgroup)],
+                                              atom_map_num, '', '0')
+            layer1_mols.append(orig_rgroup[0])
         rgroup_repls.append(layer1_mols + layer2_mols)
 
     for substs in product(*rgroup_repls):
@@ -503,7 +497,6 @@ def build_analogues(core: Chem.Mol, rgroup_line: list[Chem.Mol],
         # WARNING: not removing hydrogen atom with dummy atom neighbors
         analogue = rdmolops.RemoveHs(Chem.molzip(analogue))
         analogues.append(analogue)
-        print(f'analogue : {Chem.MolToSmiles(analogue)}')
 
     return analogues
 
@@ -551,7 +544,6 @@ def build_all_analogues(parent_mols: list[Chem.Mol], parent_ids: list[Any],
     parents_dict = {}
     for parent, parent_id, core, rgroup_line in \
             zip(parent_mols, parent_ids, cores, rgroups):
-        print(f'Doing {parent_id} : {Chem.MolToSmiles(parent)} : {Chem.MolToSmiles(core)}')
         parents_dict[parent_id] = parent
         analogues = build_analogues(core, rgroup_line, substs_data, use_layer1,
                                     use_layer2, include_orig_rgroup)
@@ -572,7 +564,6 @@ def build_all_analogues(parent_mols: list[Chem.Mol], parent_ids: list[Any],
     analogue_parent_ids = []
     analogue_col_vals = []
     for an_smi, (parent_id, analogue) in all_analogues_by_smi.items():
-        print(f'final analogue of {parent_id} : {an_smi}')
         analogue_parents.append(parents_dict[parent_id])
         analogue_parent_ids.append(parent_id)
         analogue_col_vals.append(analogue)
@@ -606,11 +597,8 @@ class RGroupReplacement(DataFunction):
         cores_column_id = string_input_field(request, 'coresColumn')
         cores_column = request.inputColumns[cores_column_id]
         cores = column_to_molecules(cores_column)
-        for core in cores:
-            print(Chem.MolToSmiles(core))
 
         rgroup_column_ids = string_list_input_field(request, 'rGroupColumns')
-        print(rgroup_column_ids)
         rgroups = []
         for rgroup_col_id in rgroup_column_ids:
             rgroup_col = request.inputColumns[rgroup_col_id]
