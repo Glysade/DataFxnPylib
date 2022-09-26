@@ -74,7 +74,9 @@ def make_rgroup_lookup_smi(mol: Chem.Mol) -> tuple[str, int]:
             atom_map_num = atom.GetAtomMapNum()
             atom.SetAtomMapNum(0)
             break
-    return Chem.MolToSmiles(mol), atom_map_num
+    smi = Chem.MolToSmiles(mol)
+    num_stars = sum(1 for i in range(len(smi)) if smi[i] == '*')
+    return smi, atom_map_num, bool(num_stars > 1)
 
 
 def make_mapped_rgroups(smis: list[str], atom_map_num: int, rgroup_smi: str,
@@ -236,47 +238,28 @@ def isotopes_to_atommaps(mol: Chem.Mol) -> Optional[Chem.Mol]:
     return mol_cp
 
 
-def assemble_molecule(core: Chem.Mol, rgroups: tuple[Chem.Mol]) -> Chem.Mol:
+def assemble_molecule(core: Chem.Mol, rgroups: tuple[Chem.Mol],
+                      polydentate: bool) -> Chem.Mol:
     """
     Take the core and r groups and make them into a molecule, labelling
     the core with _GL_CORE_ props on the atoms.
     """
-    def add_in_bits(new_core, substs, check_uniq=False):
-        bitty_mol = Chem.Mol(core)
-        for i, anat in enumerate(bitty_mol.GetAtoms()):
-            anat.SetProp('_GL_CORE_', str(i))
-        rgroups_smis = []
-        for rg in rgroups:
-            if check_uniq:
-                rg_smi = Chem.MolToSmiles(rg)
-            else:
-                rg_smi = 'dummy'
-            if rg_smi not in rgroups_smis:
-                bitty_mol = Chem.CombineMols(bitty_mol, rg)
-                if check_uniq:
-                    rgroups_smis.append(rg_smi)
-        return bitty_mol
+    mol = Chem.Mol(core)
+    for i, anat in enumerate(mol.GetAtoms()):
+        anat.SetProp('_GL_CORE_', str(i))
 
-    mol = add_in_bits(core, rgroups, False)
-    # Note that if an RGroup was an H (rgroup_lookup = *[H]),
-    # molzip will complain but will do things correctly. Look out
-    # for
-    # WARNING: not removing hydrogen atom with dummy atom neighbors
-    try:
-        mol = Chem.molzip(mol)
-    except RuntimeError as err:
-        # if it was a bidentate rgroup, it will appear twice and produce
-        # this exception.  Take out the duplicate and go again.  It's a
-        # bit inefficient to do the check every time for a relatively
-        # rare occurrence.
-        err_str = str(err)
-        if (err_str.startswith('Invariant Violation')
-                and -1 != err_str.find('molzip: bond info already exists for end atom with label')):
-            mol = add_in_bits(core, rgroups, True)
-            mol = Chem.molzip(mol)
+    rgroups_smis = []
+    for rg in rgroups:
+        if polydentate:
+            rg_smi = Chem.MolToSmiles(rg)
         else:
-            raise(err)
+            rg_smi = 'dummy'
+        if rg_smi not in rgroups_smis:
+            mol = Chem.CombineMols(mol, rg)
+            if polydentate:
+                rgroups_smis.append(rg_smi)
 
+    mol = Chem.molzip(mol)
     mol = rdmolops.RemoveHs(mol)
     # remove all the atom maps
     for at in mol.GetAtoms():
@@ -299,10 +282,13 @@ def build_analogues(core: Chem.Mol, rgroup_line: list[Chem.Mol],
     new_rgroups = [isotopes_to_atommaps(rg) for rg in rgroup_line]
     analogues = []
     rgroup_repls = []
+    polydentate = False
     for rgroup in new_rgroups:
         if rgroup is None:
             continue
-        rgroup_lookup, atom_map_num = make_rgroup_lookup_smi(rgroup)
+        rgroup_lookup, atom_map_num, pd = make_rgroup_lookup_smi(rgroup)
+        if pd:
+            polydentate = True
         layer1_mols, layer2_mols = \
             make_rgroups_for_substs(rgroup_lookup, atom_map_num,
                                     substs_data, use_layer1, use_layer2)
@@ -316,7 +302,7 @@ def build_analogues(core: Chem.Mol, rgroup_line: list[Chem.Mol],
         rgroup_repls.append(layer1_mols + layer2_mols)
 
     for substs in product(*rgroup_repls):
-        analogues.append(assemble_molecule(new_core, substs))
+        analogues.append(assemble_molecule(new_core, substs, polydentate))
 
     return analogues
 
