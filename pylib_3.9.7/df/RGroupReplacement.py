@@ -5,9 +5,8 @@ from json import load
 from pathlib import Path
 from typing import Any, Optional
 
-from rdkit import Chem
+from rdkit import Chem, rdBase
 from rdkit.Chem import rdDepictor, rdmolops
-from rdkit.Chem.rdchem import MolSanitizeException
 
 from df.chem_helper import column_to_molecules, input_field_to_molecule, \
     molecules_to_column
@@ -94,11 +93,19 @@ def make_mapped_rgroups(smis: list[str], atom_map_num: int, rgroup_smi: str,
     ret_mols = []
     prop_name = '_GL_R_GROUP_' + layer_number + '_'
     for smi in smis:
-        map_smi = smi.replace('*', f'[*:{atom_map_num}]')
-        frag_mol = Chem.MolFromSmiles(map_smi)
+        # The R SMILES '*[H]' gives an irritating warning
+        # 'not removing hydrogen atom with dummy atom neighbors'
+        # and it crops up a lot.  Turn it off.
+        if smi == '*[H]':
+            rdBase.DisableLog('rdApp.warning')
+        frag_mol = Chem.MolFromSmiles(smi)
+        if smi == '*[H]':
+            rdBase.EnableLog('rdApp.warning')
         if smi != rgroup_smi:
             for at in frag_mol.GetAtoms():
-                at.SetProp(prop_name, f'{at.GetIdx()}')
+                if at.GetIsotope() == 0 and not at.GetAtomMapNum():
+                    at.SetAtomMapNum(atom_map_num)
+                    at.SetProp(prop_name, f'{at.GetIdx()}')
         ret_mols.append(frag_mol)
 
     return ret_mols
@@ -111,10 +118,8 @@ def make_rgroups_for_substs(rgroup_smi: str, atom_map_num: int,
     Lookup the replacements for rgroup_smi in substs_data and build
     molecules from them with the atom_map_num added to the dummy atom
     so they are ready to go straight into molzip.  Returns lists of
-    the layer1 and layer2 replacements as requested.  If rgroup_smi
-    isn't in substs_data, just returns rgroup_smi suitably mackled so
-    that no replacement is performed in the end.  That's a bit
-    inefficient, but probably good enough.
+    the layer1 and layer2 replacements as requested, which might
+    both be empty if rgroup_smi isn't in substs_data.
 
     :param rgroup_smi:
     :param atom_map_num:
@@ -128,17 +133,17 @@ def make_rgroups_for_substs(rgroup_smi: str, atom_map_num: int,
     if use_layer1:
         try:
             layer1_smis = substs_data[rgroup_smi][0]
+            layer1_mols = make_mapped_rgroups(layer1_smis, atom_map_num,
+                                              rgroup_smi, '1')
         except KeyError:
-            layer1_smis = [rgroup_smi]
-        layer1_mols = make_mapped_rgroups(layer1_smis, atom_map_num,
-                                          rgroup_smi, '1')
+            pass
     if use_layer2:
         try:
             layer2_smis = substs_data[rgroup_smi][1]
+            layer2_mols = make_mapped_rgroups(layer2_smis, atom_map_num,
+                                              rgroup_smi, '2')
         except KeyError:
-            layer2_smis = [rgroup_smi]
-        layer2_mols = make_mapped_rgroups(layer2_smis, atom_map_num,
-                                          rgroup_smi, '2')
+            pass
 
     return layer1_mols, layer2_mols
 
@@ -231,6 +236,54 @@ def isotopes_to_atommaps(mol: Chem.Mol) -> Optional[Chem.Mol]:
     return mol_cp
 
 
+def assemble_molecule(core: Chem.Mol, rgroups: tuple[Chem.Mol]) -> Chem.Mol:
+    """
+    Take the core and r groups and make them into a molecule, labelling
+    the core with _GL_CORE_ props on the atoms.
+    """
+    def add_in_bits(new_core, substs, check_uniq=False):
+        bitty_mol = Chem.Mol(core)
+        for i, anat in enumerate(bitty_mol.GetAtoms()):
+            anat.SetProp('_GL_CORE_', str(i))
+        rgroups_smis = []
+        for rg in rgroups:
+            if check_uniq:
+                rg_smi = Chem.MolToSmiles(rg)
+            else:
+                rg_smi = 'dummy'
+            if rg_smi not in rgroups_smis:
+                bitty_mol = Chem.CombineMols(bitty_mol, rg)
+                if check_uniq:
+                    rgroups_smis.append(rg_smi)
+        return bitty_mol
+
+    mol = add_in_bits(core, rgroups, False)
+    # Note that if an RGroup was an H (rgroup_lookup = *[H]),
+    # molzip will complain but will do things correctly. Look out
+    # for
+    # WARNING: not removing hydrogen atom with dummy atom neighbors
+    try:
+        mol = Chem.molzip(mol)
+    except RuntimeError as err:
+        # if it was a bidentate rgroup, it will appear twice and produce
+        # this exception.  Take out the duplicate and go again.  It's a
+        # bit inefficient to do the check every time for a relatively
+        # rare occurrence.
+        err_str = str(err)
+        if (err_str.startswith('Invariant Violation')
+                and -1 != err_str.find('molzip: bond info already exists for end atom with label')):
+            mol = add_in_bits(core, rgroups, True)
+            mol = Chem.molzip(mol)
+        else:
+            raise(err)
+
+    mol = rdmolops.RemoveHs(mol)
+    # remove all the atom maps
+    for at in mol.GetAtoms():
+        at.SetAtomMapNum(0)
+    return mol
+
+
 def build_analogues(core: Chem.Mol, rgroup_line: list[Chem.Mol],
                     substs_data: dict[str: tuple[list[str], list[str]]],
                     use_layer1: bool, use_layer2: bool,
@@ -263,17 +316,7 @@ def build_analogues(core: Chem.Mol, rgroup_line: list[Chem.Mol],
         rgroup_repls.append(layer1_mols + layer2_mols)
 
     for substs in product(*rgroup_repls):
-        analogue = Chem.Mol(new_core)
-        for i, anat in enumerate(analogue.GetAtoms()):
-            anat.SetProp('_GL_CORE_', str(i))
-        for s in substs:
-            analogue = Chem.CombineMols(analogue, s)
-        # Note that if an RGroup was an H (rgroup_lookup = *[H]),
-        # molzip will complain but will do things correctly. Look out
-        # for
-        # WARNING: not removing hydrogen atom with dummy atom neighbors
-        analogue = rdmolops.RemoveHs(Chem.molzip(analogue))
-        analogues.append(analogue)
+        analogues.append(assemble_molecule(new_core, substs))
 
     return analogues
 
@@ -307,6 +350,8 @@ def build_all_analogues(parent_mols: list[Chem.Mol], parent_ids: list[Any],
     parents_dict = {}
     for parent, parent_id, core, rgroup_line in \
             zip(parent_mols, parent_ids, cores, rgroups):
+        if parent is None or core is None:
+            continue
         # Build the parent back up from the core and original R Groups,
         # so it can be aligned and the core coloured for easy
         # comparison to the analogues.
