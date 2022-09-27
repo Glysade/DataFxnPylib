@@ -340,15 +340,16 @@ def rebuild_parents(cores: list[Chem.Mol], rgroups: list[list[Chem.Mol]]) -> lis
 def build_all_analogues(parent_mols: list[Chem.Mol], parent_ids: list[Any],
                         cores: list[Chem.Mol], rgroups: list[list[Chem.Mol]],
                         use_layer1: bool, use_layer2: bool,
-                        include_orig_rgroup: bool) -> tuple[dict[str: tuple[str, Chem.Mol]],
-                                                            list[int],
-                                                            dict[str: Chem.Mol]]:
+                        include_orig_rgroup: bool) \
+        -> tuple[dict[str: tuple[str, Chem.Mol, Chem.Mol]],
+                 list[int],
+                 dict[str: Chem.Mol]]:
     """
     Make all the analogues from the cores and rgroups.
     Returns a tuple containing:
-        a dict keyed on the analogue SMILES that holds the analogues
-        parent id and the analogue molecule itself
-        a list of the number of analogues each parent made
+        a dict keyed on the analogue SMILES that holds the analogue's
+        parent id, the analogue molecule itself, and the core used;
+        a list of the number of analogues each parent made;
         a dict, keyed on parent id containing a copy of the parent
         that has been constructed from the appropriate core and
         input r groups, aligned on the core and with details to colour
@@ -359,9 +360,7 @@ def build_all_analogues(parent_mols: list[Chem.Mol], parent_ids: list[Any],
     rdDepictor.SetPreferCoordGen(True)
 
     all_analogues_by_smi = {}
-    all_analogues = []
     analogue_counts = defaultdict(int)
-
     rebuilt_parents = rebuild_parents(cores, rgroups)
 
     parent_smis = set([Chem.MolToSmiles(pm) for pm in parent_mols])
@@ -379,15 +378,14 @@ def build_all_analogues(parent_mols: list[Chem.Mol], parent_ids: list[Any],
             if (an_smi not in parent_smis and an_smi not in rebuilt_parent_smis
                     and an_smi not in all_analogues_by_smi):
                 align_analogue_to_core(an, core)
-                all_analogues_by_smi[an_smi] = (parent_id, an)
+                all_analogues_by_smi[an_smi] = (parent_id, an, core)
                 analogue_counts[parent_id] += 1
-                all_analogues.append((an, parent_id))
 
     analogue_count_vals = [analogue_counts[id] for id in parent_ids]
     return all_analogues_by_smi, analogue_count_vals, parents_dict
 
 
-def build_output_objects(all_analogues_by_smi: dict[str: tuple[str, Chem.Mol]],
+def build_output_objects(all_analogues_by_smi: dict[str: tuple[str, Chem.Mol, Chem.Mol]],
                          analogue_count_vals: list[int],
                          parents_dict: dict[str, Chem.Mol],
                          input_column_name: str,
@@ -405,22 +403,26 @@ def build_output_objects(all_analogues_by_smi: dict[str: tuple[str, Chem.Mol]],
     analogue_parents = []
     analogue_parent_ids = []
     analogue_col_vals = []
-    for an_smi, (parent_id, analogue) in all_analogues_by_smi.items():
+    analogue_cores = []
+    for an_smi, (parent_id, analogue, core) in all_analogues_by_smi.items():
         analogue_parents.append(parents_dict[parent_id])
         analogue_parent_ids.append(parent_id)
         analogue_col_vals.append(analogue)
+        analogue_cores.append(core)
 
     parent_col = molecules_to_column(analogue_parents,
                                      f'Parent {input_column_name}',
                                      DataType.BINARY)
     parent_ids_col = ColumnData(name='Parent IDs', dataType=id_type,
                                 values=analogue_parent_ids)
+    cores_col = molecules_to_column(analogue_cores, 'Cores', DataType.BINARY)
     analogue_col = molecules_to_column(analogue_col_vals, 'Analogues',
                                        DataType.BINARY)
 
     table_name = f'Analogues of {input_column_name}'
     table_data = TableData(tableName=table_name,
-                           columns=[parent_col, parent_ids_col, analogue_col])
+                           columns=[parent_col, parent_ids_col, cores_col,
+                                    analogue_col])
 
     return table_data, analogue_count_col
 
