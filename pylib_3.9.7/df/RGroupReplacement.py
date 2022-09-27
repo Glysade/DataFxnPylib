@@ -307,6 +307,34 @@ def build_analogues(core: Chem.Mol, rgroup_line: list[Chem.Mol],
     return analogues
 
 
+def rebuild_parents(cores: list[Chem.Mol], rgroups: list[list[Chem.Mol]]) -> list[Chem.Mol]:
+    """
+    Take the cores and rgroups and rebuild the parents, aligned on the
+    core and coloured.  Because the RGD loses chirality information at
+    the centres the rgroups are attached to, the resultant molecules
+    may not be identical to the original parent. For example,
+    CONC(=O)c1cc(N2CC[C@H](NC(=O)c3[nH]c(C)c(Cl)c3Cl)C2)nc(Cl)n1
+    becomes
+    CONC(=O)c1cc(N2CCC(NC(=O)c3[nH]c(C)c(Cl)c3Cl)C2)nc(Cl)n1 with core
+    [*:3]N1CCC(C2)NC(=O)[*:4] because the RGD loses the chirality info
+    where the amide attaches to the tetrahydropyrrolidine.
+    """
+    # Since we're not doing R Group substitution, we don't need the
+    # real substitutions database.
+    dummy_substs_data = {}
+
+    rebuilt_parents = []
+    for core, rgroup_line in zip(cores, rgroups):
+        if core is None:
+            continue
+        new_parent = build_analogues(core, rgroup_line, dummy_substs_data,
+                                     False, False, True)
+        align_analogue_to_core(new_parent[0], core)
+        rebuilt_parents.append(new_parent[0])
+
+    return rebuilt_parents
+
+
 def build_all_analogues(parent_mols: list[Chem.Mol], parent_ids: list[Any],
                         cores: list[Chem.Mol], rgroups: list[list[Chem.Mol]],
                         use_layer1: bool, use_layer2: bool,
@@ -332,24 +360,22 @@ def build_all_analogues(parent_mols: list[Chem.Mol], parent_ids: list[Any],
     all_analogues = []
     analogue_counts = defaultdict(int)
 
+    rebuilt_parents = rebuild_parents(cores, rgroups)
+
     parent_smis = set([Chem.MolToSmiles(pm) for pm in parent_mols])
+    rebuilt_parent_smis = set([Chem.MolToSmiles(pm) for pm in rebuilt_parents])
     parents_dict = {}
     for parent, parent_id, core, rgroup_line in \
             zip(parent_mols, parent_ids, cores, rgroups):
-        if parent is None or core is None:
+        if core is None:
             continue
-        # Build the parent back up from the core and original R Groups,
-        # so it can be aligned and the core coloured for easy
-        # comparison to the analogues.
-        new_parent = build_analogues(core, rgroup_line, substs_data, False, False,
-                                     True)
-        align_analogue_to_core(new_parent[0], core)
-        parents_dict[parent_id] = new_parent[0]
+        parents_dict[parent_id] = parent
         analogues = build_analogues(core, rgroup_line, substs_data, use_layer1,
                                     use_layer2, include_orig_rgroup)
         for an in analogues:
             an_smi = Chem.MolToSmiles(an)
-            if an_smi not in parent_smis and an_smi not in all_analogues_by_smi:
+            if (an_smi not in parent_smis and an_smi not in rebuilt_parent_smis
+                    and an_smi not in all_analogues_by_smi):
                 align_analogue_to_core(an, core)
                 all_analogues_by_smi[an_smi] = (parent_id, an)
                 analogue_counts[parent_id] += 1
@@ -461,9 +487,8 @@ class RGroupReplacement(DataFunction):
 
         column_id = string_input_field(request, 'idColumn')
         id_column = request.inputColumns[column_id]
-        self._parent_ids = id_column.values
         self._ids_type = id_column.dataType
-
+        self._parent_ids = id_column.values
         cores_column_id = string_input_field(request, 'coresColumn')
         cores_column = request.inputColumns[cores_column_id]
         self._cores = column_to_molecules(cores_column)
