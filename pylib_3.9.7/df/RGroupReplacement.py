@@ -307,7 +307,7 @@ def build_analogues(core: Chem.Mol, rgroup_line: list[Chem.Mol],
     return analogues
 
 
-def rebuild_parents(cores: list[Chem.Mol], rgroups: list[list[Chem.Mol]]) -> list[Chem.Mol]:
+def rebuild_parents(cores: list[Chem.Mol], rgroups: list[list[Chem.Mol]]) -> list[Optional[Chem.Mol]]:
     """
     Take the cores and rgroups and rebuild the parents, aligned on the
     core and coloured.  Because the RGD loses chirality information at
@@ -318,6 +318,7 @@ def rebuild_parents(cores: list[Chem.Mol], rgroups: list[list[Chem.Mol]]) -> lis
     CONC(=O)c1cc(N2CCC(NC(=O)c3[nH]c(C)c(Cl)c3Cl)C2)nc(Cl)n1 with core
     [*:3]N1CCC(C2)NC(=O)[*:4] because the RGD loses the chirality info
     where the amide attaches to the tetrahydropyrrolidine.
+    If the core is None, the rebuilt parent will also be None.
     """
     # Since we're not doing R Group substitution, we don't need the
     # real substitutions database.
@@ -326,11 +327,12 @@ def rebuild_parents(cores: list[Chem.Mol], rgroups: list[list[Chem.Mol]]) -> lis
     rebuilt_parents = []
     for core, rgroup_line in zip(cores, rgroups):
         if core is None:
-            continue
-        new_parent = build_analogues(core, rgroup_line, dummy_substs_data,
-                                     False, False, True)
-        align_analogue_to_core(new_parent[0], core)
-        rebuilt_parents.append(new_parent[0])
+            rebuilt_parents.append(None)
+        else:
+            new_parent = build_analogues(core, rgroup_line, dummy_substs_data,
+                                         False, False, True)
+            align_analogue_to_core(new_parent[0], core)
+            rebuilt_parents.append(new_parent[0])
 
     return rebuilt_parents
 
@@ -363,13 +365,13 @@ def build_all_analogues(parent_mols: list[Chem.Mol], parent_ids: list[Any],
     rebuilt_parents = rebuild_parents(cores, rgroups)
 
     parent_smis = set([Chem.MolToSmiles(pm) for pm in parent_mols])
-    rebuilt_parent_smis = set([Chem.MolToSmiles(pm) for pm in rebuilt_parents])
+    rebuilt_parent_smis = set([Chem.MolToSmiles(pm) for pm in rebuilt_parents if pm is not None])
     parents_dict = {}
-    for parent, parent_id, core, rgroup_line in \
-            zip(parent_mols, parent_ids, cores, rgroups):
+    for rb_parent, parent_id, core, rgroup_line in \
+            zip(rebuilt_parents, parent_ids, cores, rgroups):
         if core is None:
             continue
-        parents_dict[parent_id] = parent
+        parents_dict[parent_id] = rb_parent
         analogues = build_analogues(core, rgroup_line, substs_data, use_layer1,
                                     use_layer2, include_orig_rgroup)
         for an in analogues:
@@ -382,7 +384,6 @@ def build_all_analogues(parent_mols: list[Chem.Mol], parent_ids: list[Any],
                 all_analogues.append((an, parent_id))
 
     analogue_count_vals = [analogue_counts[id] for id in parent_ids]
-
     return all_analogues_by_smi, analogue_count_vals, parents_dict
 
 
