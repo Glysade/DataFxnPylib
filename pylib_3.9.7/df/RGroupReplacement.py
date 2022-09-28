@@ -453,7 +453,7 @@ def build_output_objects(all_analogues_by_smi: dict[str: tuple[str, Chem.Mol, Ch
                            columns=[parent_col, parent_ids_col, cores_col,
                                     analogue_col])
 
-    return table_data
+    return table_data, analogue_count_col
 
 
 def r_group_replacement(parent_mols: list[Chem.Mol], parent_ids: list[Any],
