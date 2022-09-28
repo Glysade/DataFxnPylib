@@ -450,7 +450,7 @@ def build_output_objects(all_analogues_by_smi: dict[str: tuple[str, Chem.Mol, Ch
 
     table_name = f'Analogues of {input_column_name}'
     table_data = TableData(tableName=table_name,
-                           columns=[parent_col, parent_ids_col, cores_col,
+                           columns=[parent_col, parent_ids_col,
                                     analogue_col])
 
     return table_data, analogue_count_col
