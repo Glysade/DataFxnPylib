@@ -567,5 +567,5 @@ class RGroupReplacement(DataFunction):
                                 self._use_layer1, self._use_layer2,
                                 self._include_orig_rgroup,
                                 self._structure_column_name)
-        return DataFunctionResponse(outputTables=[],
-                                    outputColumns=[])
+        return DataFunctionResponse(outputTables=[analogues_table],
+                                    outputColumns=[analogue_count_col])
