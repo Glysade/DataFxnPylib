@@ -534,14 +534,14 @@ class RGroupReplacement(DataFunction):
         self._cores = column_to_molecules(cores_column)
 
         all_rgroup_column_ids = string_list_input_field(request,
-                                                        'allRGroupColumns')
+                                                        'rGroupColumns')
         all_rgroups = []
         for rgroup_col_id in all_rgroup_column_ids:
             rgroup_col = request.inputColumns[rgroup_col_id]
             all_rgroups.append(column_to_molecules(rgroup_col))
 
         rgroups_to_use_column_ids =\
-            string_list_input_field(request, 'rGroupColumnsToUse')
+            string_list_input_field(request, 'rGroupColumns')
         rgroups_to_use = []
         for rgroup_col_id in rgroups_to_use_column_ids:
             rgroup_col = request.inputColumns[rgroup_col_id]
