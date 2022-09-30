@@ -440,8 +440,7 @@ def build_output_objects(all_analogues_by_smi: dict[str: tuple[str, Chem.Mol, Ch
         analogue_col_vals.append(analogue)
         analogue_cores.append(core)
         analogue_changed_r_groups.append(analogue.GetProp(rgc_prop_name))
-        # The properties of a molecule are always returned as strings.
-        core_numbers.append(int(analogue.GetProp(cn_prop_name)))
+        core_numbers.append(analogue.GetProp(cn_prop_name))
 
     parent_col = molecules_to_column(analogue_parents,
                                      f'Parent {input_column_name}',
@@ -449,7 +448,9 @@ def build_output_objects(all_analogues_by_smi: dict[str: tuple[str, Chem.Mol, Ch
     parent_ids_col = ColumnData(name='Parent IDs', dataType=id_type,
                                 values=analogue_parent_ids)
     cores_col = molecules_to_column(analogue_cores, 'Cores', DataType.BINARY)
-    core_nums_col = ColumnData(name='Core Number', dataType=DataType.INTEGER,
+    # Leave the core numbers as strings as that gives a more convenient
+    # filter in Spotfire.
+    core_nums_col = ColumnData(name='Core Number', dataType=DataType.STRING,
                                values=core_numbers)
     analogue_col = molecules_to_column(analogue_col_vals, 'Analogues',
                                        DataType.BINARY)
