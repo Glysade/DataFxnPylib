@@ -108,7 +108,7 @@ def make_mapped_rgroups(smis: list[str], atom_map_num: int, rgroup_smi: str,
             for at in frag_mol.GetAtoms():
                 if at.GetAtomicNum() == 0 and not at.GetAtomMapNum():
                     at.SetAtomMapNum(atom_map_num)
-                    at.SetProp(prop_name, f'{at.GetIdx()}')
+                at.SetProp(prop_name, f'{at.GetIdx()}')
         ret_mols.append(frag_mol)
 
     return ret_mols
@@ -261,7 +261,6 @@ def assemble_molecule(core: Chem.Mol, rgroups: tuple[Chem.Mol],
             if polydentate:
                 rgroups_smis.append(rg_smi)
 
-    mol_smi = Chem.MolToSmiles(mol)
     mol = Chem.molzip(mol)
     mol = rdmolops.RemoveHs(mol)
     return mol
