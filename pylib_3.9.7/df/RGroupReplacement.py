@@ -269,8 +269,7 @@ def assemble_molecule(core: Chem.Mol, rgroups: tuple[Chem.Mol],
 
 def build_analogues(core: Chem.Mol, rgroups_line: list[Chem.Mol],
                     substs_data: dict[str: tuple[list[str], list[str]]],
-                    use_layer1: bool, use_layer2: bool,
-                    include_orig_rgroup:bool) -> list[Chem.Mol]:
+                    use_layer1: bool, use_layer2: bool) -> list[Chem.Mol]:
     """
     Build all the analogues for a single core and set of R Groups.
     Returns a list of unique molecules.
@@ -284,7 +283,7 @@ def build_analogues(core: Chem.Mol, rgroups_line: list[Chem.Mol],
     analogues = []
     rgroup_repls = []
     polydentate = False
-    for rgroup in rgroups:
+    for i, rgroup in enumerate(rgroups):
         if rgroup is None:
             continue
         rgroup_lookup, atom_map_num, pd = make_rgroup_lookup_smi(rgroup)
@@ -293,14 +292,15 @@ def build_analogues(core: Chem.Mol, rgroups_line: list[Chem.Mol],
         layer1_mols, layer2_mols = \
             make_rgroups_for_substs(rgroup_lookup, atom_map_num,
                                     substs_data, use_layer1, use_layer2)
-        # If there are no replacements for the R Group, or it has been
-        # explicitly asked for, set it up so it will go back on.  Use
-        # a layer number of 0 so it isn't highlighted. rgroup is
-        # altered by make_group_lookup_smi, so we need a new copy.
-        if include_orig_rgroup or (not layer1_mols and not layer2_mols):
-            orig_rgroup = make_mapped_rgroups([Chem.MolToSmiles(rgroup)],
-                                              atom_map_num, '', '0')
-            layer1_mols.append(orig_rgroup[0])
+        # Add in the original R Group so we also get products with no
+        # change at each position. Use a layer number of 0 so it isn't
+        # highlighted. rgroup is altered by make_group_lookup_smi, so
+        # we need a new copy.  Flag the copy as being the original R{i}
+        # group for later use.
+        orig_rgroup = make_mapped_rgroups([Chem.MolToSmiles(rgroup)],
+                                          atom_map_num, '', '0')
+        orig_rgroup[0].SetProp(f'_GL_ORIG_R_GROUP_{i}_', f'R{i}')
+        layer1_mols.append(orig_rgroup[0])
         rgroup_repls.append(layer1_mols + layer2_mols)
 
     for substs in product(*rgroup_repls):
@@ -331,17 +331,15 @@ def rebuild_parents(cores: list[Chem.Mol], rgroups: list[list[Chem.Mol]]) -> lis
             rebuilt_parents.append(None)
         else:
             new_parent = build_analogues(core, rgroup_line, dummy_substs_data,
-                                         False, False, True)
+                                         False, False)
             align_analogue_to_core(new_parent[0], core)
             rebuilt_parents.append(new_parent[0])
     return rebuilt_parents
 
 
 def build_all_analogues(parent_mols: list[Chem.Mol], parent_ids: list[Any],
-                        cores: list[Chem.Mol],
-                        rgroups: list[list[Chem.Mol]],
-                        use_layer1: bool, use_layer2: bool,
-                        include_orig_rgroup: bool) \
+                        cores: list[Chem.Mol], rgroups: list[list[Chem.Mol]],
+                        use_layer1: bool, use_layer2: bool) \
         -> tuple[dict[str: tuple[str, Chem.Mol, Chem.Mol]],
                  list[int],
                  dict[str: Chem.Mol]]:
@@ -378,8 +376,7 @@ def build_all_analogues(parent_mols: list[Chem.Mol], parent_ids: list[Any],
             continue
         parents_dict[parent_id] = rb_parent
         analogues = build_analogues(core, rgroups_line, substs_data,
-                                    use_layer1, use_layer2,
-                                    include_orig_rgroup)
+                                    use_layer1, use_layer2)
         for an in analogues:
             an_smi = Chem.MolToSmiles(an)
             if (an_smi not in parent_smis and an_smi not in rebuilt_parent_smis
@@ -437,7 +434,6 @@ def build_output_objects(all_analogues_by_smi: dict[str: tuple[str, Chem.Mol, Ch
 def r_group_replacement(parent_mols: list[Chem.Mol], parent_ids: list[Any],
                         cores: list[Chem.Mol], rgroups: list[list[Chem.Mol]],
                         id_type: DataType, use_layer1: bool, use_layer2: bool,
-                        include_orig_rgroup: bool,
                         input_column_name: str) -> tuple[TableData, ColumnData]:
     """
     Takes a set of cores and RGroups and makes all possible
@@ -459,17 +455,13 @@ def r_group_replacement(parent_mols: list[Chem.Mol], parent_ids: list[Any],
     :param rgroups: All the rgroups in the original parent
     :param use_layer1: Use the layer 1 replacements in the table (bool)
     :param use_layer2: Use the layer 1 replacements in the table (bool)
-    :param include_orig_rgroup: include the original R Group in the
-                                substitution list i.e. include products
-                                with no change at each position.
     :param input_column_name: (str)
     :return: The table of analogues (TableData) and a column
     (ColumnData) to be added to the original column.
     """
     all_analogues_by_smi, analogue_count_vals, parents_dict = \
         build_all_analogues(parent_mols, parent_ids, cores, rgroups,
-                            use_layer1, use_layer2,
-                            include_orig_rgroup)
+                            use_layer1, use_layer2)
 
     return build_output_objects(all_analogues_by_smi, analogue_count_vals,
                                 parents_dict, input_column_name,
@@ -487,7 +479,6 @@ class RGroupReplacement(DataFunction):
         self._rgroup_lines = None
         self._use_layer1 = False
         self._use_layer2 = False
-        self._include_orig_rgroup = False
         super().__init__()
 
     def extract_input_data(self, request: DataFunctionRequest) -> None:
@@ -516,8 +507,6 @@ class RGroupReplacement(DataFunction):
         self._rgroup_lines = list(zip(*rgroups))
         self._use_layer1 = boolean_input_field(request, 'useLayer1')
         self._use_layer2 = boolean_input_field(request, 'useLayer2')
-        self._include_orig_rgroup = boolean_input_field(request,
-                                                        'incOrigRGroups')
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
 
@@ -527,7 +516,6 @@ class RGroupReplacement(DataFunction):
             r_group_replacement(self._parent_mols, self._parent_ids,
                                 self._cores, self._rgroup_lines,
                                 self._ids_type, self._use_layer1,
-                                self._use_layer2, self._include_orig_rgroup,
-                                self._structure_column_name)
+                                self._use_layer2, self._structure_column_name)
         return DataFunctionResponse(outputTables=[analogues_table],
                                     outputColumns=[analogue_count_col])
