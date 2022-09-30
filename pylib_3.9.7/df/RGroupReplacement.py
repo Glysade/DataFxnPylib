@@ -458,7 +458,8 @@ def build_output_objects(all_analogues_by_smi: dict[str: tuple[str, Chem.Mol, Ch
                                       dataType=DataType.STRING,
                                       values=analogue_changed_r_groups)
                                       
-    table_name = f'Analogues of {input_column_name}'
+    clean_col_name = input_column_name.replace('..010','>').replace('..00Y','<').replace('..00w',' ')
+    table_name = f'Analogues of {clean_col_name}'
     table_data = TableData(tableName=table_name,
                            columns=[parent_col, parent_ids_col, analogue_col, analogue_changes_col, core_nums_col, cores_col])
                                     
