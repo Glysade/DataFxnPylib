@@ -381,11 +381,21 @@ def build_all_analogues(parent_mols: list[Chem.Mol], parent_ids: list[Any],
     parent_smis = set(parent_smis_list)
     rebuilt_parent_smis = set([Chem.MolToSmiles(pm) for pm in rebuilt_parents if pm is not None])
     parents_dict = {}
+    # Give each core a unique number
+    cores_dict = {}
 
     for rb_parent, parent_id, core, rgroups_line in \
             zip(rebuilt_parents, parent_ids, cores, rgroups):
         if core is None:
             continue
+        core_smi = Chem.MolToSmiles(core)
+        try:
+            core_num = cores_dict[core_smi]
+        except KeyError:
+            core_num = len(cores_dict) + 1
+            cores_dict[core_smi] = core_num
+        core.SetProp('GLYS_CORE_NUM', f'{core_num}')
+
         parents_dict[parent_id] = rb_parent
         analogues = build_analogues(core, rgroups_line, rgroup_col_names,
                                     substs_data, use_layer1, use_layer2)
@@ -421,13 +431,17 @@ def build_output_objects(all_analogues_by_smi: dict[str: tuple[str, Chem.Mol, Ch
     analogue_col_vals = []
     analogue_cores = []
     analogue_changed_r_groups = []
-    prop_name = 'GLYS_CHANGED_R_GROUPS'
+    core_numbers = []
+    rgc_prop_name = 'GLYS_CHANGED_R_GROUPS'
+    cn_prop_name = 'GLYS_CORE_NUM'
     for an_smi, (parent_id, analogue, core) in all_analogues_by_smi.items():
         analogue_parents.append(parents_dict[parent_id])
         analogue_parent_ids.append(parent_id)
         analogue_col_vals.append(analogue)
         analogue_cores.append(core)
-        analogue_changed_r_groups.append(analogue.GetProp(prop_name))
+        analogue_changed_r_groups.append(analogue.GetProp(rgc_prop_name))
+        # The properties of a molecule are always returned as strings.
+        core_numbers.append(int(analogue.GetProp(cn_prop_name)))
 
     parent_col = molecules_to_column(analogue_parents,
                                      f'Parent {input_column_name}',
@@ -435,6 +449,8 @@ def build_output_objects(all_analogues_by_smi: dict[str: tuple[str, Chem.Mol, Ch
     parent_ids_col = ColumnData(name='Parent IDs', dataType=id_type,
                                 values=analogue_parent_ids)
     cores_col = molecules_to_column(analogue_cores, 'Cores', DataType.BINARY)
+    core_nums_col = ColumnData(name='Core Number', dataType=DataType.INTEGER,
+                               values=core_numbers)
     analogue_col = molecules_to_column(analogue_col_vals, 'Analogues',
                                        DataType.BINARY)
     analogue_changes_col = ColumnData(name='Changed R Groups',
@@ -443,7 +459,8 @@ def build_output_objects(all_analogues_by_smi: dict[str: tuple[str, Chem.Mol, Ch
     table_name = f'Analogues of {input_column_name}'
     table_data = TableData(tableName=table_name,
                            columns=[parent_col, parent_ids_col, analogue_col,
-                                    cores_col, analogue_changes_col])
+                                    cores_col, core_nums_col,
+                                    analogue_changes_col])
 
     return table_data, analogue_count_col
 
