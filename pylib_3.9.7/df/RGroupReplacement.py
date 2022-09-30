@@ -85,7 +85,7 @@ def make_mapped_rgroups(smis: list[str], atom_map_num: int, rgroup_smi: str,
     """
     Take the SMIlES strings, create a Mol for each one and add the atom
     map num to the dummy atom.  If the SMILES for the R Group isn't the
-    same as the original, flog the atoms with the property _GL_R_GROUP_
+    same as the original, flog the atoms with the property GLYS_R_GROUP_
     plus layer_number for subsequent coloured rendering.
     :param smis:
     :param atom_map_num:
@@ -94,11 +94,11 @@ def make_mapped_rgroups(smis: list[str], atom_map_num: int, rgroup_smi: str,
     :return:
     """
     ret_mols = []
-    prop_name = '_GL_R_GROUP_' + layer_number + '_'
+    prop_name = 'GLYS_R_GROUP_' + layer_number
     for smi in smis:
         # The R SMILES '*[H]' gives an irritating warning
         # 'not removing hydrogen atom with dummy atom neighbors'
-        # and it crops up a lot.  Turn it off.
+        # and it crops up a lot.  Turn warnings off temporarily.
         if smi == '*[H]':
             rdBase.DisableLog('rdApp.warning')
         frag_mol = Chem.MolFromSmiles(smi)
@@ -168,7 +168,7 @@ def bonds_between_atoms(mol: Chem.Mol, atoms: list[int]) -> list[int]:
 
 def align_analogue_to_core(analogue: Chem.Mol, core_query: Chem.Mol) -> None:
     """
-    Use the information in atom props _GL_CORE_ to align the analogue
+    Use the information in atom props GLYS_CORE to align the analogue
     so that corresponding atoms are on top of the parent, and also
     highlight the analogue atoms and bonds of the core.  The parent
     is altered to match query_mol, so everything lines up from parent
@@ -186,12 +186,12 @@ def align_analogue_to_core(analogue: Chem.Mol, core_query: Chem.Mol) -> None:
     layer_2_ats = []
     for at in analogue.GetAtoms():
         try:
-            core_map.append((int(at.GetProp('_GL_CORE_')), at.GetIdx()))
+            core_map.append((int(at.GetProp('GLYS_CORE')), at.GetIdx()))
         except KeyError:
             pass
-        if at.HasProp('_GL_R_GROUP_1_'):
+        if at.HasProp('GLYS_R_GROUP_1'):
             layer_1_ats.append(at.GetIdx())
-        if at.HasProp('_GL_R_GROUP_2_'):
+        if at.HasProp('GLYS_R_GROUP_2'):
             layer_2_ats.append(at.GetIdx())
     rdDepictor.GenerateDepictionMatching2DStructure(analogue, core_query,
                                                     atomMap=core_map)
@@ -240,17 +240,25 @@ def isotopes_to_atommaps(mol: Chem.Mol) -> Optional[Chem.Mol]:
 
 
 def assemble_molecule(core: Chem.Mol, rgroups: tuple[Chem.Mol],
-                      polydentate: bool) -> Chem.Mol:
+                      polydentate: bool, rgroup_col_names: list[str]) -> Chem.Mol:
     """
     Take the core and r groups and make them into a molecule, labelling
-    the core with _GL_CORE_ props on the atoms.
+    the core with GLYS_CORE props on the atoms.  Add a prop
+    GLYS_CHANGED_R_GROUPS listing the r groups that were changed from
+    the original value for that positition.
     """
     mol = Chem.Mol(core)
     for i, anat in enumerate(mol.GetAtoms()):
-        anat.SetProp('_GL_CORE_', str(i))
+        anat.SetProp('GLYS_CORE', str(i))
 
     rgroups_smis = []
-    for rg in rgroups:
+    changed_r_group_list = []
+    for rg, rg_col_name in zip(rgroups, rgroup_col_names):
+        try:
+            _ = rg.GetProp('GLYS_ORIG_R_GROUP')
+        except KeyError:
+            changed_r_group_list.append(rg_col_name)
+
         if polydentate:
             rg_smi = Chem.MolToSmiles(rg)
         else:
@@ -262,11 +270,13 @@ def assemble_molecule(core: Chem.Mol, rgroups: tuple[Chem.Mol],
                 rgroups_smis.append(rg_smi)
 
     mol = Chem.molzip(mol)
+    mol.SetProp('GLYS_CHANGED_R_GROUPS', ':'.join(changed_r_group_list))
     mol = rdmolops.RemoveHs(mol)
     return mol
 
 
 def build_analogues(core: Chem.Mol, rgroups_line: list[Chem.Mol],
+                    rgroup_col_names: list[str],
                     substs_data: dict[str: tuple[list[str], list[str]]],
                     use_layer1: bool, use_layer2: bool) -> list[Chem.Mol]:
     """
@@ -282,7 +292,7 @@ def build_analogues(core: Chem.Mol, rgroups_line: list[Chem.Mol],
     analogues = []
     rgroup_repls = []
     polydentate = False
-    for i, rgroup in enumerate(rgroups):
+    for rgroup, rgroup_col_name in zip(rgroups, rgroup_col_names):
         if rgroup is None:
             continue
         rgroup_lookup, atom_map_num, pd = make_rgroup_lookup_smi(rgroup)
@@ -294,21 +304,23 @@ def build_analogues(core: Chem.Mol, rgroups_line: list[Chem.Mol],
         # Add in the original R Group so we also get products with no
         # change at each position. Use a layer number of 0 so it isn't
         # highlighted. rgroup is altered by make_group_lookup_smi, so
-        # we need a new copy.  Flag the copy as being the original R{i}
-        # group for later use.
+        # we need a new copy.  Flag the copy as being the original
+        # r group for later use.
         orig_rgroup = make_mapped_rgroups([Chem.MolToSmiles(rgroup)],
                                           atom_map_num, '', '0')
-        orig_rgroup[0].SetProp(f'_GL_ORIG_R_GROUP_{i}_', f'R{i}')
+        orig_rgroup[0].SetProp(f'GLYS_ORIG_R_GROUP', rgroup_col_name)
         layer1_mols.append(orig_rgroup[0])
         rgroup_repls.append(layer1_mols + layer2_mols)
 
     for substs in product(*rgroup_repls):
-        analogues.append(assemble_molecule(new_core, substs, polydentate))
+        analogues.append(assemble_molecule(new_core, substs, polydentate,
+                                           rgroup_col_names))
 
     return analogues
 
 
-def rebuild_parents(cores: list[Chem.Mol], rgroups: list[list[Chem.Mol]]) -> list[Optional[Chem.Mol]]:
+def rebuild_parents(cores: list[Chem.Mol], rgroups: list[list[Chem.Mol]],
+                    rgroup_col_names: list[str]) -> list[Optional[Chem.Mol]]:
     """
     Take the cores and rgroups and rebuild the parents, aligned on the
     core and coloured.  Because the RGD loses chirality information at
@@ -329,8 +341,8 @@ def rebuild_parents(cores: list[Chem.Mol], rgroups: list[list[Chem.Mol]]) -> lis
         if core is None:
             rebuilt_parents.append(None)
         else:
-            new_parent = build_analogues(core, rgroup_line, dummy_substs_data,
-                                         False, False)
+            new_parent = build_analogues(core, rgroup_line, rgroup_col_names,
+                                         dummy_substs_data, False, False)
             align_analogue_to_core(new_parent[0], core)
             rebuilt_parents.append(new_parent[0])
     return rebuilt_parents
@@ -338,6 +350,7 @@ def rebuild_parents(cores: list[Chem.Mol], rgroups: list[list[Chem.Mol]]) -> lis
 
 def build_all_analogues(parent_mols: list[Chem.Mol], parent_ids: list[Any],
                         cores: list[Chem.Mol], rgroups: list[list[Chem.Mol]],
+                        rgroup_col_names: list[str],
                         use_layer1: bool, use_layer2: bool) \
         -> tuple[dict[str: tuple[str, Chem.Mol, Chem.Mol]],
                  list[int],
@@ -359,7 +372,7 @@ def build_all_analogues(parent_mols: list[Chem.Mol], parent_ids: list[Any],
 
     all_analogues_by_smi = {}
     analogue_counts = defaultdict(int)
-    rebuilt_parents = rebuild_parents(cores, rgroups)
+    rebuilt_parents = rebuild_parents(cores, rgroups, rgroup_col_names)
 
     parent_smis_list = []
     for pm in parent_mols:
@@ -374,8 +387,8 @@ def build_all_analogues(parent_mols: list[Chem.Mol], parent_ids: list[Any],
         if core is None:
             continue
         parents_dict[parent_id] = rb_parent
-        analogues = build_analogues(core, rgroups_line, substs_data,
-                                    use_layer1, use_layer2)
+        analogues = build_analogues(core, rgroups_line, rgroup_col_names,
+                                    substs_data, use_layer1, use_layer2)
         for an in analogues:
             an_smi = Chem.MolToSmiles(an)
             if (an_smi not in parent_smis and an_smi not in rebuilt_parent_smis
@@ -407,11 +420,14 @@ def build_output_objects(all_analogues_by_smi: dict[str: tuple[str, Chem.Mol, Ch
     analogue_parent_ids = []
     analogue_col_vals = []
     analogue_cores = []
+    analogue_changed_r_groups = []
+    prop_name = 'GLYS_CHANGED_R_GROUPS'
     for an_smi, (parent_id, analogue, core) in all_analogues_by_smi.items():
         analogue_parents.append(parents_dict[parent_id])
         analogue_parent_ids.append(parent_id)
         analogue_col_vals.append(analogue)
         analogue_cores.append(core)
+        analogue_changed_r_groups.append(analogue.GetProp(prop_name))
 
     parent_col = molecules_to_column(analogue_parents,
                                      f'Parent {input_column_name}',
@@ -421,17 +437,20 @@ def build_output_objects(all_analogues_by_smi: dict[str: tuple[str, Chem.Mol, Ch
     cores_col = molecules_to_column(analogue_cores, 'Cores', DataType.BINARY)
     analogue_col = molecules_to_column(analogue_col_vals, 'Analogues',
                                        DataType.BINARY)
-
+    analogue_changes_col = ColumnData(name='Changed R Groups',
+                                      dataType=DataType.STRING,
+                                      values=analogue_changed_r_groups)
     table_name = f'Analogues of {input_column_name}'
     table_data = TableData(tableName=table_name,
-                           columns=[parent_col, parent_ids_col, cores_col,
-                                    analogue_col])
+                           columns=[parent_col, parent_ids_col, analogue_col,
+                                    cores_col, analogue_changes_col])
 
     return table_data, analogue_count_col
 
 
 def r_group_replacement(parent_mols: list[Chem.Mol], parent_ids: list[Any],
                         cores: list[Chem.Mol], rgroups: list[list[Chem.Mol]],
+                        rgroup_col_names: list[str],
                         id_type: DataType, use_layer1: bool, use_layer2: bool,
                         input_column_name: str) -> tuple[TableData, ColumnData]:
     """
@@ -460,7 +479,7 @@ def r_group_replacement(parent_mols: list[Chem.Mol], parent_ids: list[Any],
     """
     all_analogues_by_smi, analogue_count_vals, parents_dict = \
         build_all_analogues(parent_mols, parent_ids, cores, rgroups,
-                            use_layer1, use_layer2)
+                            rgroup_col_names, use_layer1, use_layer2)
 
     return build_output_objects(all_analogues_by_smi, analogue_count_vals,
                                 parents_dict, input_column_name,
@@ -476,6 +495,7 @@ class RGroupReplacement(DataFunction):
         self._ids_type = None
         self._cores = None
         self._rgroup_lines = None
+        self._rgroup_col_names = []
         self._use_layer1 = False
         self._use_layer2 = False
         super().__init__()
@@ -485,7 +505,6 @@ class RGroupReplacement(DataFunction):
         structure_column = request.inputColumns[column_id]
         self._parent_mols = column_to_molecules(structure_column)
         self._structure_column_name = structure_column.name
-
         column_id = string_input_field(request, 'idColumn')
         id_column = request.inputColumns[column_id]
         self._ids_type = id_column.dataType
@@ -500,6 +519,7 @@ class RGroupReplacement(DataFunction):
         for rgroup_col_id in rgroup_column_ids:
             rgroup_col = request.inputColumns[rgroup_col_id]
             rgroups.append(column_to_molecules(rgroup_col))
+            self._rgroup_col_names.append(rgroup_col.name)
 
         # pivot the R Group columns so that each row is the R Groups for an
         # input molecule, core
@@ -514,7 +534,8 @@ class RGroupReplacement(DataFunction):
         analogues_table, analogue_count_col = \
             r_group_replacement(self._parent_mols, self._parent_ids,
                                 self._cores, self._rgroup_lines,
-                                self._ids_type, self._use_layer1,
-                                self._use_layer2, self._structure_column_name)
+                                self._rgroup_col_names, self._ids_type,
+                                self._use_layer1, self._use_layer2,
+                                self._structure_column_name)
         return DataFunctionResponse(outputTables=[analogues_table],
                                     outputColumns=[analogue_count_col])
