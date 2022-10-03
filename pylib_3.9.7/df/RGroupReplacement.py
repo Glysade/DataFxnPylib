@@ -213,10 +213,10 @@ def align_analogue_to_core(analogue: Chem.Mol, core_query: Chem.Mol) -> None:
                 layer_2_bonds.append(bond.GetIdx())
 
     core_bonds_str = ' '.join([str(b + 1) for b in core_bonds])
-    prop_text = f'COLOR #00bfff\nATOMS\nBONDS {core_bonds_str}'
+    prop_text = '' #f'COLOR #00bfff\nATOMS\nBONDS {core_bonds_str}'
     if layer_1_ats:
         layer_1_bonds_str = ' '.join([str(b + 1) for b in layer_1_bonds])
-        prop_text += f'\nCOLOR #dc143c\nATOMS\nBONDS {layer_1_bonds_str}'
+        prop_text += f'\nCOLOR #00bfff\nATOMS\nBONDS {layer_1_bonds_str}'
     if layer_2_ats:
         layer_2_bonds_str = ' '.join([str(b + 1) for b in layer_2_bonds])
         prop_text += f'\nCOLOR #ffbf00\nATOMS\nBONDS {layer_2_bonds_str}'
