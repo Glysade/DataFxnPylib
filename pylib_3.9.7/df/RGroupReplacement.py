@@ -271,7 +271,10 @@ def assemble_molecule(core: Chem.Mol, rgroups: tuple[Chem.Mol],
 
     mol = Chem.molzip(mol)
     mol.SetProp('GLYS_CHANGED_R_GROUPS', ':'.join(changed_r_group_list))
-    mol = rdmolops.RemoveHs(mol)
+    try:
+        mol = rdmolops.RemoveHs(mol)
+    except Chem.rdchem.KekulizeException:
+        pass
     return mol
 
 
@@ -337,14 +340,18 @@ def rebuild_parents(cores: list[Chem.Mol], rgroups: list[list[Chem.Mol]],
     # real substitutions database.
     dummy_substs_data = {}
     rebuilt_parents = []
+    core_num = 0
     for core, rgroup_line in zip(cores, rgroups):
+        core_num += 1
         if core is None:
             rebuilt_parents.append(None)
         else:
+            print(f'doing core {core_num} : {Chem.MolToSmiles(core)}')
             new_parent = build_analogues(core, rgroup_line, rgroup_col_names,
                                          dummy_substs_data, False, False)
             align_analogue_to_core(new_parent[0], core)
             rebuilt_parents.append(new_parent[0])
+            print(f'Rebuilt parent : {Chem.MolToSmiles(new_parent[0])}')
     return rebuilt_parents
 
 
@@ -530,7 +537,8 @@ class RGroupReplacement(DataFunction):
         cores_column_id = string_input_field(request, 'coresColumn')
         cores_column = request.inputColumns[cores_column_id]
         self._cores = column_to_molecules(cores_column)
-
+        for c in self._cores:
+            print(Chem.MolToSmiles(c))
         rgroup_column_ids = string_list_input_field(request,
                                                     'rGroupColumns')
         rgroups = []
