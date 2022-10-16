@@ -63,17 +63,19 @@ def type_to_format(type: str) -> RDKitFormat:
         raise ValueError("Unknown chemical type {}".format(type))
 
 
-def string_to_mol(type: RDKitFormat, mol_string: str) -> Optional[Union[Mol, ChemicalReaction]]:
+def string_to_mol(type: RDKitFormat, mol_string: str,
+                  do_sanitize_mol: Optional[bool]=True) -> Optional[Union[Mol, ChemicalReaction]]:
     """
     Converts a string to an RDKit molecule
 
     :param type: The structure format for the string as :class:`RDKitFormat`
     :param mol_string: Molecular string
+    :param do_sanitize_mol: whether to run sanitize_mol on the final mol
     :return: RDkit molecule, class :class:`rdkit.Chem.rdchem.Mol`
     """
 
     if type == RDKitFormat.sdf:
-        mol = sdf_to_mol(mol_string)
+        mol = sdf_to_mol(mol_string, do_sanitize_mol)
     elif type == RDKitFormat.pdb:
         mol = Chem.MolFromPDBBlock(mol_string)
     elif type == RDKitFormat.smi:
@@ -133,19 +135,20 @@ def string_to_mols(type: RDKitFormat, mol_string: str) -> List[Mol]:
     return mols
 
 
-def sdf_to_mol(mol_string: str) -> Optional[Mol]:
+def sdf_to_mol(mol_string: str, do_sanitize_mol: Optional[bool]=True) -> Optional[Mol]:
     # if we want SD tags we need to use a supplier as Chem.MolFromMolBlock does not process SD tags
     sdf_in = BytesIO(mol_string.encode('UTF-8'))
     supplier = Chem.ForwardSDMolSupplier(sdf_in, sanitize=False)
     mol = next(supplier)
-    try:
-        sanitize_mol(mol)
-    except Exception as ex:
-        name = type(ex).__name__
-        print('Got exception {} processing sdf input {}'.format(name, mol_string))
-        return None
-    finally:
-        sdf_in.close()
+    if do_sanitize_mol:
+        try:
+            sanitize_mol(mol)
+        except Exception as ex:
+            name = type(ex).__name__
+            print('Got exception {} processing sdf input {}'.format(name, mol_string))
+            return None
+        finally:
+            sdf_in.close()
     return mol
     # mol = Chem.MolFromMolBlock(mol_string, True, False, False)
 

@@ -24,15 +24,17 @@ from df.data_transfer import ColumnData, DataType, DataFunctionRequest
 from ruse.rdkit.rdkit_utils import type_to_format, string_to_mol, mol_to_string
 
 
-def column_to_molecules(column: ColumnData) -> List[Optional[Mol]]:
+def column_to_molecules(column: ColumnData,
+                        do_sanitize_mols: Optional[bool]=True) -> List[Optional[Mol]]:
     """
     Converts a structure column to a list of molecules
 
     :param column: the input column
+    :param do_sanitize_mols: whether to run sanitize_mol on the final mols
     :return: a list of molecules
     """
 
-    mols = [None if v is None else value_to_molecule(v, column.dataType, column.contentType) for v in column.values]
+    mols = [None if v is None else value_to_molecule(v, column.dataType, column.contentType, do_sanitize_mols) for v in column.values]
     return mols
 
 
@@ -59,13 +61,15 @@ def _default_content_type(data_type: DataType) -> str:
     return content_type
 
 
-def value_to_molecule(v: str, data_type: DataType, content_type: Optional[str] = None) -> Optional[Mol]:
+def value_to_molecule(v: str, data_type: DataType, content_type: Optional[str] = None,
+                        do_sanitize_mols: Optional[bool]=True) -> Optional[Mol]:
     """
     Converts a string value to a molecule.
 
     :param v: the string value
     :param data_type: the data type for the string should be :attr:`~df.data_transfer.DataType.STRING` or :attr:`~df.data_transfer.DataType.BINARY`
     :param content_type: molecular content type
+    :param do_sanitize_mols: whether to run sanitize_mol on the final mols
     :return: a molecule
     """
     if data_type != DataType.BINARY and data_type != data_type.STRING:
@@ -75,7 +79,7 @@ def value_to_molecule(v: str, data_type: DataType, content_type: Optional[str] =
 
     data = _decode_binary(v) if data_type == DataType.BINARY else v
     fmt = type_to_format(content_type)
-    return string_to_mol(fmt, data)
+    return string_to_mol(fmt, data, do_sanitize_mols)
 
 
 def input_field_to_molecule(request: DataFunctionRequest, query_data_field: str = 'queryData') -> Optional[Mol]:
