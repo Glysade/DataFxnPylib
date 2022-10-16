@@ -8,11 +8,11 @@ from typing import Any, Optional
 from rdkit import Chem, rdBase
 from rdkit.Chem import rdDepictor, rdmolops
 
-from df.chem_helper import column_to_molecules, input_field_to_molecule, \
-    molecules_to_column
+from df.chem_helper import column_to_molecules, molecules_to_column
 from df.data_transfer import DataFunction, DataFunctionRequest, \
     DataFunctionResponse, ColumnData, DataType, \
     TableData, boolean_input_field, string_input_field, string_list_input_field
+from ruse.rdkit.rdkit_utils import sanitize_mol
 
 
 def load_replacements_data() -> dict[str: tuple[list[str], list[str]]]:
@@ -59,23 +59,29 @@ def load_replacements_data() -> dict[str: tuple[list[str], list[str]]]:
 
 def make_rgroup_lookup_smi(mol: Chem.Mol) -> tuple[str, int, bool]:
     """
-    Take the RGroup, which is expected to have atom mappings on the
+    Take the RGroup, which is expected to have atom mappings (via
+    isotope numbers) on the
     dummy atoms, and return a new SMILES with the first atom mapping
     removed and its atom map number.  There will sometimes
     be polydentate RGroups which won't have a replacement in the table
     so don't need to be handled - it's fine if they are left with
     dangling atom maps as they will be placed straight back onto the
-    core.
-    Removes the atom map num from molecule, so the molecule is
-    altered by the process.
+    core.  A bool is returned to show if this is the case or not.
+    Operations are carried out on a copy of the molecule, so it is
+    not affected.
     """
+    mol_cp = Chem.Mol(mol)
+    # The incoming R Groups aren't sanitized, but they need to be for
+    # the lookup.  If they don't sanitize to something sensible, the
+    # replacement table won't have them, we can safely assume.
+    sanitize_mol(mol_cp)
     atom_map_num = 0
-    for atom in mol.GetAtoms():
+    for atom in mol_cp.GetAtoms():
         if atom.GetAtomicNum() == 0:
-            atom_map_num = atom.GetAtomMapNum()
-            atom.SetAtomMapNum(0)
+            atom_map_num = atom.GetIsotope()
+            atom.SetIsotope(0)
             break
-    smi = Chem.MolToSmiles(mol)
+    smi = Chem.MolToSmiles(mol_cp)
     num_stars = sum(1 for i in range(len(smi)) if smi[i] == '*')
     return smi, atom_map_num, bool(num_stars > 1)
 
@@ -99,6 +105,9 @@ def make_mapped_rgroups(smis: list[str], atom_map_num: int, rgroup_smi: str,
         # The R SMILES '*[H]' gives an irritating warning
         # 'not removing hydrogen atom with dummy atom neighbors'
         # and it crops up a lot.  Turn warnings off temporarily.
+        # Clearly if there are other things wrong with the SMILES this
+        # will mask that, but the SMILES should be from a curated
+        # database of valid R Group replacements, so it should be safe.
         if smi == '*[H]':
             rdBase.DisableLog('rdApp.warning')
         frag_mol = Chem.MolFromSmiles(smi)
@@ -106,9 +115,9 @@ def make_mapped_rgroups(smis: list[str], atom_map_num: int, rgroup_smi: str,
             rdBase.EnableLog('rdApp.warning')
         if smi != rgroup_smi:
             for at in frag_mol.GetAtoms():
-                if at.GetAtomicNum() == 0 and not at.GetAtomMapNum():
-                    at.SetAtomMapNum(atom_map_num)
-                at.SetProp(prop_name, f'{at.GetIdx()}')
+                if at.GetAtomicNum() == 0 and not at.GetIsotope():
+                    at.SetIsotope(atom_map_num)
+                at.SetProp(prop_name, str(at.GetIdx()))
         ret_mols.append(frag_mol)
 
     return ret_mols
@@ -122,7 +131,9 @@ def make_rgroups_for_substs(rgroup_smi: str, atom_map_num: int,
     molecules from them with the atom_map_num added to the dummy atom
     so they are ready to go straight into molzip.  Returns lists of
     the layer1 and layer2 replacements as requested, which might
-    both be empty if rgroup_smi isn't in substs_data.
+    both be empty if rgroup_smi isn't in substs_data.  The replacements
+    will have the appropriate isotope numbers (atom_map_num) so that
+    they are all ready for molzip.
 
     :param rgroup_smi:
     :param atom_map_num:
@@ -223,31 +234,15 @@ def align_analogue_to_core(analogue: Chem.Mol, core_query: Chem.Mol) -> None:
     analogue.SetProp('Renderer_Highlight', prop_text)
 
 
-def isotopes_to_atommaps(mol: Chem.Mol) -> Optional[Chem.Mol]:
-    """
-    Take the molecule and return a copy with all the isotope-labelled
-    dummy atoms replaced by atom-mapped dummy atoms of 0 isotope.
-    """
-    if mol is None:
-        return None
-
-    mol_cp = Chem.Mol(mol)
-    for at in mol_cp.GetAtoms():
-        if at.GetAtomicNum() == 0:
-            at.SetAtomMapNum(at.GetIsotope())
-            at.SetIsotope(0)
-    return mol_cp
-
-
 def assemble_molecule(core: Chem.Mol, rgroups: tuple[Chem.Mol],
                       polydentate: bool, rgroup_col_names: list[str]) -> Chem.Mol:
     """
     Take the core and r groups and make them into a molecule, labelling
     the core with GLYS_CORE props on the atoms.  Add a prop
     GLYS_CHANGED_R_GROUPS listing the r groups that were changed from
-    the original value for that positition.
+    the original value for that position.
     """
-    mol = Chem.Mol(core)
+    mol = Chem.RWMol(core)
     for i, anat in enumerate(mol.GetAtoms()):
         anat.SetProp('GLYS_CORE', str(i))
 
@@ -264,12 +259,13 @@ def assemble_molecule(core: Chem.Mol, rgroups: tuple[Chem.Mol],
         else:
             rg_smi = 'dummy'
         if rg_smi not in rgroups_smis:
-            Chem.AssignStereochemistry(rg)
-            mol = Chem.CombineMols(mol, rg)
+            mol.InsertMol(rg)
             if polydentate:
                 rgroups_smis.append(rg_smi)
 
-    mol = Chem.molzip(mol)
+    params = Chem.MolzipParams()
+    params.label = Chem.rdmolops.MolzipLabel.Isotope
+    mol = Chem.molzip(mol, params=params)
     mol.SetProp('GLYS_CHANGED_R_GROUPS', ':'.join(changed_r_group_list))
     try:
         mol = rdmolops.RemoveHs(mol)
@@ -284,20 +280,16 @@ def build_analogues(core: Chem.Mol, rgroups_line: list[Chem.Mol],
                     use_layer1: bool, use_layer2: bool) -> list[Chem.Mol]:
     """
     Build all the analogues for a single core and set of R Groups.
-    Returns a list of unique molecules.
+    Returns a list of all molecules, which may include duplicates.
     """
-    # The core and rgroups come in with the attachment points as dummy
-    # atoms with isotope labels.  For historical reasons it's easier if
-    # these are replaced by atom maps
-    new_core = isotopes_to_atommaps(core)
-    rgroups = [isotopes_to_atommaps(rg) for rg in rgroups_line]
-
     analogues = []
     rgroup_repls = []
     polydentate = False
-    for rgroup, rgroup_col_name in zip(rgroups, rgroup_col_names):
+    for rgroup, rgroup_col_name in zip(rgroups_line, rgroup_col_names):
         if rgroup is None:
             continue
+        # To some extent this is redundant when rebuilding parents, but
+        # we need the polydentate flag.
         rgroup_lookup, atom_map_num, pd = make_rgroup_lookup_smi(rgroup)
         if pd:
             polydentate = True
@@ -306,17 +298,19 @@ def build_analogues(core: Chem.Mol, rgroups_line: list[Chem.Mol],
                                     substs_data, use_layer1, use_layer2)
         # Add in the original R Group so we also get products with no
         # change at each position. Use a layer number of 0 so it isn't
-        # highlighted. rgroup is altered by make_group_lookup_smi, so
-        # we need a new copy.  Flag the copy as being the original
+        # highlighted.  Flag the copy as being the original
         # r group for later use.
-        orig_rgroup = make_mapped_rgroups([Chem.MolToSmiles(rgroup)],
-                                          atom_map_num, '', '0')
-        orig_rgroup[0].SetProp(f'GLYS_ORIG_R_GROUP', rgroup_col_name)
-        layer1_mols.append(orig_rgroup[0])
+        orig_rgroup_cp = Chem.Mol(rgroup)
+        for rgat in orig_rgroup_cp.GetAtoms():
+            if rgat.GetAtomicNum() == 0 and rgat.GetIsotope():
+                rgat.SetProp('GLYS_R_GROUP_0', f'{rgat.GetIdx()}')
+        orig_rgroup_cp.SetProp(f'GLYS_ORIG_R_GROUP', rgroup_col_name)
+        layer1_mols.append(orig_rgroup_cp)
         rgroup_repls.append(layer1_mols + layer2_mols)
 
+    # build all combinations of the replacement R Groups onto the core.
     for substs in product(*rgroup_repls):
-        analogues.append(assemble_molecule(new_core, substs, polydentate,
+        analogues.append(assemble_molecule(core, substs, polydentate,
                                            rgroup_col_names))
 
     return analogues
@@ -333,25 +327,24 @@ def rebuild_parents(cores: list[Chem.Mol], rgroups: list[list[Chem.Mol]],
     becomes
     CONC(=O)c1cc(N2CCC(NC(=O)c3[nH]c(C)c(Cl)c3Cl)C2)nc(Cl)n1 with core
     [*:3]N1CCC(C2)NC(=O)[*:4] because the RGD loses the chirality info
-    where the amide attaches to the tetrahydropyrrolidine.
+    where the amide attaches to the tetrahydropyrrolidine.  This has
+    been accepted as a bug in the RGD and is scheduled to be fixed.
+    The fix won't break this code when it comes.
     If the core is None, the rebuilt parent will also be None.
     """
     # Since we're not doing R Group substitution, we don't need the
     # real substitutions database.
     dummy_substs_data = {}
     rebuilt_parents = []
-    core_num = 0
     for core, rgroup_line in zip(cores, rgroups):
-        core_num += 1
         if core is None:
             rebuilt_parents.append(None)
         else:
-            print(f'doing core {core_num} : {Chem.MolToSmiles(core)}')
             new_parent = build_analogues(core, rgroup_line, rgroup_col_names,
                                          dummy_substs_data, False, False)
+            sanitize_mol(new_parent[0])
             align_analogue_to_core(new_parent[0], core)
             rebuilt_parents.append(new_parent[0])
-            print(f'Rebuilt parent : {Chem.MolToSmiles(new_parent[0])}')
     return rebuilt_parents
 
 
@@ -408,7 +401,13 @@ def build_all_analogues(parent_mols: list[Chem.Mol], parent_ids: list[Any],
                                     substs_data, use_layer1, use_layer2)
         for an in analogues:
             an_smi = Chem.MolToSmiles(an)
-            if (an_smi not in parent_smis and an_smi not in rebuilt_parent_smis
+            # We check for duplicates against parent_smis and
+            # rebuilt_parent_smis because of the RGD chirality bug
+            # mentioned above.  Once that is fixed and it is certain
+            # that the rebuilt parent will be the same as the original,
+            # the 2nd check can be removed.
+            if (an_smi not in parent_smis
+                    and an_smi not in rebuilt_parent_smis
                     and an_smi not in all_analogues_by_smi):
                 align_analogue_to_core(an, core)
                 all_analogues_by_smi[an_smi] = (parent_id, an, core)
@@ -536,15 +535,15 @@ class RGroupReplacement(DataFunction):
         self._parent_ids = id_column.values
         cores_column_id = string_input_field(request, 'coresColumn')
         cores_column = request.inputColumns[cores_column_id]
-        self._cores = column_to_molecules(cores_column)
-        for c in self._cores:
-            print(Chem.MolToSmiles(c))
+        self._cores = column_to_molecules(cores_column,
+                                          do_sanitize_mols=False)
         rgroup_column_ids = string_list_input_field(request,
                                                     'rGroupColumns')
         rgroups = []
         for rgroup_col_id in rgroup_column_ids:
             rgroup_col = request.inputColumns[rgroup_col_id]
-            rgroups.append(column_to_molecules(rgroup_col))
+            rgroups.append(column_to_molecules(rgroup_col,
+                                               do_sanitize_mols=False))
             self._rgroup_col_names.append(rgroup_col.name)
 
         # pivot the R Group columns so that each row is the R Groups for an
