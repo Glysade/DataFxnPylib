@@ -468,13 +468,11 @@ def build_output_objects(all_analogues_by_smi: dict[str: tuple[str, Chem.Mol, Ch
                                       dataType=DataType.STRING,
                                       values=analogue_changed_r_groups)
                                       
-    #clean_col_name = input_column_name.replace('..010','>').replace('..00Y','<').replace('..00w',' ')
-    #table_name = f'{clean_col_name} Analogs'
     table_name = 'R-Group Replacements'
     table_data = TableData(tableName=table_name,
-                           columns=[parent_col, parent_ids_col, analogue_col, analogue_changes_col, core_nums_col, cores_col])
-                                    
-                                    
+                           columns=[parent_col, parent_ids_col, analogue_col,
+                                    analogue_changes_col, core_nums_col,
+                                    cores_col])
 
     return table_data, analogue_count_col
 
