@@ -11,6 +11,7 @@ Utility functions for handling chemical structures using RDKit (www.rdkit.org)
 import base64
 import gzip
 import math
+import re
 from contextlib import contextmanager
 from enum import Enum
 from io import BytesIO, StringIO
@@ -19,7 +20,7 @@ from typing import Iterable, Union, List, Optional
 from rdkit import Chem
 from rdkit.Chem import AllChem, RWMol, SanitizeFlags
 from rdkit.Chem.rdChemReactions import ChemicalReaction
-from rdkit.Chem.rdchem import Mol, KekulizeException, AtomValenceException
+from rdkit.Chem.rdchem import Mol, KekulizeException, AtomValenceException, Atom
 from rdkit.Geometry.rdGeometry import Point3D
 
 
@@ -135,6 +136,34 @@ def string_to_mols(type: RDKitFormat, mol_string: str) -> List[Mol]:
     return mols
 
 
+def _get_group_number(atom: Atom) -> int:
+    r_group_prop = '_MolFileRLabel'
+    if atom.GetAtomicNum() > 0:
+        return 0
+    if atom.HasProp(r_group_prop):
+        try:
+            r_group_prop = int(atom.GetProp(r_group_prop))
+            if r_group_prop > 0:
+                return r_group_prop
+        except ValueError:
+            pass
+    if atom.GetAtomMapNum() > 0:
+        return atom.GetAtomMapNum()
+    if atom.GetIsotope() > 0:
+        return atom.getIsotope()
+    return 0
+
+
+def _standardize_rgroups(mol: Mol) -> None:
+    for atom in mol.GetAtoms():
+        group_number = _get_group_number(atom)
+        if group_number > 0:
+            atom.SetIsotope(group_number)
+            if not atom.HasQuery():
+                atom.SetAtomMapNum(group_number)
+            atom.SetProp('_MolFileRLabel', str(group_number))
+
+
 def sdf_to_mol(mol_string: str, do_sanitize_mol: Optional[bool]=True) -> Optional[Mol]:
     # if we want SD tags we need to use a supplier as Chem.MolFromMolBlock does not process SD tags
     sdf_in = BytesIO(mol_string.encode('UTF-8'))
@@ -149,6 +178,7 @@ def sdf_to_mol(mol_string: str, do_sanitize_mol: Optional[bool]=True) -> Optiona
             return None
         finally:
             sdf_in.close()
+    _standardize_rgroups(mol)
     return mol
     # mol = Chem.MolFromMolBlock(mol_string, True, False, False)
 
@@ -167,6 +197,9 @@ def sanitize_mol(mol: Mol) -> None:
 
 
 def smiles_to_mol(smiles: str) -> Optional[Mol]:
+    # convert Chemdraw RGroups to RDKit style
+    if '[R' in smiles:
+        smiles = re.sub(r'\[R(\d+)\]', r'[*:\1]', smiles)
     mol = Chem.MolFromSmiles(smiles)
     try:
         if not mol:
@@ -183,6 +216,7 @@ def smiles_to_mol(smiles: str) -> Optional[Mol]:
                     Chem.SanitizeMol(mol, flags)
             if not mol:
                 print("Failed to convert smiles {} to mol!".format(smiles))
+        _standardize_rgroups(mol)
         return mol
     except Exception as ex:
         name = type(ex).__name__

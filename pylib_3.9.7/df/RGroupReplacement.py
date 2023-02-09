@@ -204,6 +204,8 @@ def align_analogue_to_core(analogue: Chem.Mol, core_query: Chem.Mol) -> None:
             layer_1_ats.append(at.GetIdx())
         if at.HasProp('GLYS_R_GROUP_2'):
             layer_2_ats.append(at.GetIdx())
+    if core_query.GetNumConformers() == 0:
+        rdDepictor.Compute2DCoords(core_query)
     rdDepictor.GenerateDepictionMatching2DStructure(analogue, core_query,
                                                     atomMap=core_map)
     core_map.sort(key=lambda p: p[0])
