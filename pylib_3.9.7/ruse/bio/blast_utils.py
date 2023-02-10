@@ -181,7 +181,7 @@ class BlastRecords(Frozen):
         blastdbcmd = full_path_to_blast_exe('blastdbcmd')
         args = [blastdbcmd, '-db', self.database, '-entry_batch', file_in, '-outfmt', '%f', '-out', file_out]
         try:
-            subprocess.run(args, check=True)
+            subprocess.run(args, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as ex:
             self.error = "Blastdbcmd error {}".format(ex)
             return

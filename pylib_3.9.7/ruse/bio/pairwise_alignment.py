@@ -78,7 +78,7 @@ def stretcher_pairwise_alignment(query: SeqRecord, targets: List[SeqRecord]) -> 
         args = {'asequence': a_in_file, 'bsequence': b_in_file, 'outfile': out_file,
                 'gapopen': 12, 'gapextend': 2, 'aformat': 'srspair'}
         cline = StretcherCommandline(**args)
-        print("emboss command line is {}".format(cline))
+        # print("emboss command line is {}".format(cline))
         stdout, stderr = cline()
         alignments = list(AlignIO.parse(out_file, "emboss"))
         assert len(alignments) == 1
@@ -110,7 +110,7 @@ def _pairwise_alignment(method: PairwiseAlignmentMethod, query: SeqRecord, targe
         cline = WaterCommandline(**args)
     else:
         raise ValueError()
-    print("emboss command line is {}".format(cline))
+    # print("emboss command line is {}".format(cline))
     stdout, stderr = cline()
 
     alignments = list(AlignIO.parse(out_file, "emboss"))
