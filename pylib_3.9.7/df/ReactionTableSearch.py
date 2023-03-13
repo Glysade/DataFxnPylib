@@ -72,10 +72,11 @@ class ReactionTableSearch(DataFunction):
         properties = [request.inputColumns[column_id].values for column_id in property_column_ids]
         property_names = ['_'.join(request.inputColumns[column_id].name.split()) for column_id in property_column_ids]
         additional_column_ids = string_list_input_field(request, 'additionalColumns')
-        additional_values = [request.inputColumns[column_id].values for column_id in additional_column_ids]
-        additional_names = ['_'.join(request.inputColumns[column_id].name.split()) for column_id in
-                            additional_column_ids]
-        additional_columns = [request.inputColumns[column_id] for column_id in additional_column_ids]
+        if additional_column_ids:
+            additional_values = [request.inputColumns[column_id].values for column_id in additional_column_ids]
+            additional_names = ['_'.join(request.inputColumns[column_id].name.split()) for column_id in
+                                additional_column_ids]
+            additional_columns = [request.inputColumns[column_id] for column_id in additional_column_ids]
 
         lhs: List[Mol] = []
         rhs: List[Mol] = []
@@ -90,9 +91,10 @@ class ReactionTableSearch(DataFunction):
             deltas.append([])
             from_properties.append([])
             to_properties.append([])
-        for _ in range(len(additional_columns)):
-            from_values.append([])
-            to_values.append([])
+        if additional_column_ids:
+            for _ in range(len(additional_columns)):
+                from_values.append([])
+                to_values.append([])
 
         for row, structure in enumerate(structures):
             if not structure:
@@ -131,11 +133,12 @@ class ReactionTableSearch(DataFunction):
                         from_properties[i].append(v)
                     for i, v in enumerate(t):
                         to_properties[i].append(v)
-                    f, t = carry_over(row, other_row, additional_values)
-                    for i, v in enumerate(f):
-                        from_values[i].append(v)
-                    for i, v in enumerate(t):
-                        to_values[i].append(v)
+                    if additional_column_ids:
+                        f, t = carry_over(row, other_row, additional_values)
+                        for i, v in enumerate(f):
+                            from_values[i].append(v)
+                        for i, v in enumerate(t):
+                            to_values[i].append(v)
 
         lhs_column = molecules_to_column(lhs, 'LHS', DataType.BINARY)
         rhs_column = molecules_to_column(rhs, 'RHS', DataType.BINARY)
@@ -149,14 +152,15 @@ class ReactionTableSearch(DataFunction):
             columns.append(column)
             column = ColumnData(name=f'Delta {name}', dataType=DataType.DOUBLE, values=deltas[index])
             columns.append(column)
-        for index, name in enumerate(additional_names):
-            additional_column = additional_columns[index]
-            column = ColumnData(name=f'LHS {name}', dataType=additional_column.dataType,
-                                values=from_values[index], contentType=additional_column.contentType)
-            columns.append(column)
-            column = ColumnData(name=f'RHS {name}', dataType=additional_column.dataType,
-                                values=to_values[index], contentType=additional_column.contentType)
-            columns.append(column)
+        if additional_column_ids:
+            for index, name in enumerate(additional_names):
+                additional_column = additional_columns[index]
+                column = ColumnData(name=f'LHS {name}', dataType=additional_column.dataType,
+                                    values=from_values[index], contentType=additional_column.contentType)
+                columns.append(column)
+                column = ColumnData(name=f'RHS {name}', dataType=additional_column.dataType,
+                                    values=to_values[index], contentType=additional_column.contentType)
+                columns.append(column)
 
         output_table = TableData(tableName='Pair Finder Results', columns=columns)
         response = DataFunctionResponse(outputTables=[output_table])
