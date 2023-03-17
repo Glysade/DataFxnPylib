@@ -61,6 +61,12 @@ class ReactionTableSearch(DataFunction):
             raise ValueError('Number of products in reaction is not one')
         if rxn.GetNumReactantTemplates() != 1:
             raise ValueError('Number of reactants in reaction is not one')
+        reactant = rxn.GetReactants()[0]
+        chiral_reactant = False
+        for atom in reactant.GetAtoms():
+            if atom.GetChiralTag() in [Chem.ChiralType.CHI_TETRAHEDRAL_CW, Chem.ChiralType.CHI_TETRAHEDRAL_CCW]:
+                chiral_reactant = True
+                break
 
         structure_column_id = string_input_field(request, 'structureColumn')
         structures = column_to_molecules(request.inputColumns[structure_column_id])
@@ -104,7 +110,14 @@ class ReactionTableSearch(DataFunction):
                 continue
             product_list = None
             try:
-                product_list = rxn.RunReactants([structure])
+                skip_run = False
+                if chiral_reactant:
+                    if not structure.HasSubstructMatch(reactant, useChirality=True):
+                        skip_run = True
+                if not skip_run:
+                    product_list = rxn.RunReactants([structure])
+                else:
+                    product_list = []
             except:
                 if not product_list:
                     continue

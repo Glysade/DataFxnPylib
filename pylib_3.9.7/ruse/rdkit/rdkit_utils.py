@@ -20,7 +20,7 @@ from typing import Iterable, Union, List, Optional
 from rdkit import Chem
 from rdkit.Chem import AllChem, RWMol, SanitizeFlags
 from rdkit.Chem.rdChemReactions import ChemicalReaction
-from rdkit.Chem.rdchem import Mol, KekulizeException, AtomValenceException, Atom
+from rdkit.Chem.rdchem import Mol, KekulizeException, AtomValenceException, Atom, MolSanitizeException
 from rdkit.Geometry.rdGeometry import Point3D
 
 
@@ -234,7 +234,10 @@ def string_to_reaction(rxn_content_type: str, rxn_text: str) -> Optional[Chemica
         elif rxn_content_type in ['chemical/x-mdl-molfile', 'chemical/x-mdl-molfile-v3000', 'chemical/x-mdl-rxnfile']:
             if '$RXN' not in rxn_text:
                 raise ValueError(f'Input is not a RXN block: {rxn_text}')
-            rxn = AllChem.ReactionFromRxnBlock(rxn_text)
+            try:
+                rxn = AllChem.ReactionFromRxnBlock(rxn_text, True)
+            except MolSanitizeException:
+                rxn = AllChem.ReactionFromRxnBlock(rxn_text)
         else:
             raise ValueError(f'Unable to convert content type {rxn_content_type} to reaction')
     except:
