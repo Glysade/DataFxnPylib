@@ -195,10 +195,12 @@ def replace_linkers(query_smiles: str, db_file: str,
     linker_smis = []
     split_smi = split_input_smiles(query_smiles, linker_smis, max_heavies,
                                    max_bonds)
-    print(f'split_smi : {split_smi}')
-    print(f'linker_smis : {linker_smis}')
-    for l in linker_smis:
-        print(f'linker_smi : {l}')
+    # print(f'split_smi : {split_smi}')
+    # print(f'linker_smis : {linker_smis}')
+    # for l in linker_smis:
+    #     print(f'linker_smi : {l}')
+    if not linker_smis:
+        return []
 
     new_smis = [split_smi]
     for lsmi in linker_smis:
