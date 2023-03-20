@@ -263,7 +263,7 @@ def bulk_replace_linkers(mol_file: str, db_file: str,
     for mol in suppl:
         if not mol or not mol.GetNumAtoms():
             continue
-        print(f'Doing {mol.GetProp("_Name")}')
+        # print(f'Doing {mol.GetProp("_Name")}')
         mol_smi = Chem.MolToSmiles(mol)
         new_mols = replace_linkers(mol_smi, db_file, max_heavies, max_bonds,
                                    plus_length, minus_length, match_donors,
@@ -283,6 +283,9 @@ def trim_linkers_by_length(conn: sqlite3.Connection, query_linker: str,
      FROM linkers WHERE linker_smiles = ?"""
 
     row = conn.execute(sql1, (query_linker,)).fetchone()
+    if row is None:
+        return []
+
     if plus_length == -1:
         max_length = 1000
     else:
@@ -312,6 +315,8 @@ def trim_linkers_by_hbonding(conn: sqlite3.Connection, query_linker: str,
      FROM linkers WHERE linker_smiles = ?"""
 
     row = conn.execute(sql1, (query_linker,)).fetchone()
+    if row is None:
+        return []
     num_donors = row[0]
     num_acceptors = row[1]
 
@@ -375,6 +380,9 @@ def fetch_bioisosteres(linker_smi: str, db_file: str,
     sql = """SELECT linker1_smiles, linker2_smiles FROM bioisosteres
     WHERE linker1_smiles = ? or linker2_smiles = ?"""
     linkers = conn.execute(sql, (mended_smi, mended_smi)).fetchall()
+    if not linkers:
+        return []
+
     bios = []
     for linker in linkers:
         if linker[0] == mended_smi:
@@ -447,7 +455,8 @@ def main(cli_args):
     else:
         new_mols = bulk_replace_linkers(args.input_file, args.db_file,
                                         args.max_heavies, args.max_bonds,
-                                        args.plus_length, args.minus_length)
+                                        args.plus_length, args.minus_length,
+                                        args.match_donors, args.match_acceptors)
     if new_mols is None or not new_mols:
         return False
 
