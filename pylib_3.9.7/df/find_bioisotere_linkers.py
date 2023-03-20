@@ -12,7 +12,7 @@ import json
 import sqlite3
 import sys
 
-import find_linkers as fl
+import df.find_linkers as fl
 
 from os import close
 from pathlib import Path
@@ -24,7 +24,7 @@ from rdkit import rdBase, Chem
 from rdkit.Chem import rdDepictor
 from rdkit.Chem.Draw import rdMolDraw2D
 
-from int_range import IntRange
+from df.int_range import IntRange
 
 
 class Bioisostere:
