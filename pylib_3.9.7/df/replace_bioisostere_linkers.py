@@ -14,8 +14,8 @@ from typing import Optional
 from rdkit import rdBase, Chem
 from rdkit.Chem import rdmolops
 
-import find_linkers as fl
-from int_range import IntRange
+import df.find_linkers as fl
+from df.int_range import IntRange
 
 
 def parse_args(cli_args: list[str]):

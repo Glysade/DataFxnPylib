@@ -19,8 +19,8 @@ from rdkit import rdBase, Chem
 from rdkit.Chem import rdmolops, rdDepictor
 from rdkit.Chem.Draw import rdMolDraw2D
 
-from float_range import FloatRange
-from int_range import IntRange
+from df.float_range import FloatRange
+from df.int_range import IntRange
 
 
 # Find linkers in a file of structures using method described in
