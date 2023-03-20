@@ -310,23 +310,33 @@ def trim_linkers_by_hbonding(conn: sqlite3.Connection, query_linker: str,
      FROM linkers WHERE linker_smiles = ?"""
 
     row = conn.execute(sql1, (query_linker,)).fetchone()
-    if row[0] and match_donors:
-        must_have_donor = True
+    if match_donors:
+        check_donors = True
+        if row[0]:
+            must_have_donor = True
+        else:
+            must_have_donor = False
     else:
-        must_have_donor = False
-    if row[1] and match_acceptors:
-        must_have_acceptor = True
+        check_donors = False
+    if match_acceptors:
+        check_acceptors = True
+        if row[1]:
+            must_have_acceptor = True
+        else:
+            must_have_acceptor = False
     else:
-        must_have_acceptor = False
+        check_acceptors = False
 
     sql2 = f"""SELECT DISTINCT num_donors, num_acceptors, linker_smiles
      FROM linkers WHERE
       linker_smiles IN ({','.join(['?' for _ in range(len(linkers))])})"""
     new_linkers = []
     for row in conn.execute(sql2, linkers):
-        if must_have_donor and not row[0]:
+        if (check_donors and ((must_have_donor and not row[0])
+                              or (not must_have_donor and row[0]))):
             continue
-        if must_have_acceptor and not row[1]:
+        if (check_acceptors and ((must_have_acceptor and not row[0])
+                              or (not must_have_acceptor and row[0]))):
             continue
         new_linkers.append(row[2])
     return new_linkers
