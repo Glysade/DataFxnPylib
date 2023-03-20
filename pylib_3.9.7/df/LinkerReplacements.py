@@ -43,7 +43,10 @@ class LinkerReplacements(DataFunction):
                                                      'plusDeltaBonds')
         self._minus_delta_bonds = integer_input_field(request,
                                                       'minusDeltaBonds')
-        self._match_hbonds = boolean_input_field(request, 'matchHBonds')
+        self._match_hbonds = boolean_input_field(request, 'matchHbonds')
+        # column_id = string_input_field(request, 'idColumn')
+        # id_column = request.inputColumns[column_id]
+        # print(id_column.values)
 
     def do_replacements(self) -> tuple[list[Chem.Mol], list[Chem.Mol]]:
         """
