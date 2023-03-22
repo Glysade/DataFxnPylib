@@ -9,6 +9,7 @@ import sqlite3
 import sys
 
 from pathlib import Path
+from random import shuffle
 from typing import Optional
 
 from rdkit import rdBase, Chem
@@ -73,6 +74,14 @@ def parse_args(cli_args: list[str]):
                         help='If True and the query linker has an hbond'
                              ' acceptor, the replacement must too, and not if'
                              ' not.  If False, it will take either.')
+    parser.add_argument('--max-mols-per-input', dest='max_mols_per_input',
+                        type=IntRange(1), default=100,
+                        help='Set a maximum number of products for each input'
+                             ' molecule.  With several common linkers, the'
+                             ' combinatorial explosion can make the results'
+                             ' set too larger.  If the maximum is exceeded, a'
+                             ' random selection of the requisite number is'
+                             ' made.  Default=%(default)s.')
 
     args = parser.parse_args(cli_args)
     return args
@@ -171,7 +180,8 @@ def split_input_smiles(query_smiles: str, linker_smis: list[str],
 def replace_linkers(query_smiles: str, db_file: str,
                     max_heavies: int, max_bonds: int,
                     plus_length: int, minus_length: int,
-                    match_donors: bool, match_acceptors: bool) -> list[Chem.Mol]:
+                    match_donors: bool, match_acceptors: bool,
+                    max_mols_per_input: int) -> list[Chem.Mol]:
     """
     Take the query SMILES string, find any linkers in the structure and
     returns new molecules with the linkers replaced by ones plucked
@@ -191,6 +201,9 @@ def replace_linkers(query_smiles: str, db_file: str,
         minus_length:
         match_donors:
         match_acceptors:
+        max_mols_per_input: Maximum number of product results for each
+                            input molecule.  A random subset will be
+                            returned if this is exceeded.
 
     Returns:
         new molecules
@@ -220,6 +233,10 @@ def replace_linkers(query_smiles: str, db_file: str,
             next_new_smis.extend(make_new_smiles(nm, lsmi, bios))
         new_smis = next_new_smis
 
+    if len(new_smis) > max_mols_per_input:
+        shuffle(new_smis)
+        new_smis = new_smis[:max_mols_per_input]
+
     new_mols = []
     for new_smi in new_smis:
         mol = Chem.MolFromSmiles(new_smi)
@@ -235,8 +252,8 @@ def replace_linkers(query_smiles: str, db_file: str,
 def bulk_replace_linkers(mol_file: str, db_file: str,
                          max_heavies: int, max_bonds: int,
                          plus_length: int, minus_length: int,
-                         match_donors: bool,
-                         match_acceptors: bool) -> Optional[list[Chem.Mol]]:
+                         match_donors: bool, match_acceptors: bool,
+                         max_mols_per_input: int) -> Optional[list[Chem.Mol]]:
     """
     Take the structures in the mol file and process them with
     replace_linkers.  Returns None if file can't be read.
@@ -255,6 +272,7 @@ def bulk_replace_linkers(mol_file: str, db_file: str,
         minus_length:
         match_donors:
         match_acceptors:
+        max_mols_per_input:
 
     Returns:
         new molecules
@@ -271,7 +289,7 @@ def bulk_replace_linkers(mol_file: str, db_file: str,
         mol_smi = Chem.MolToSmiles(mol)
         new_mols = replace_linkers(mol_smi, db_file, max_heavies, max_bonds,
                                    plus_length, minus_length, match_donors,
-                                   match_acceptors)
+                                   match_acceptors, max_mols_per_input)
         all_new_mols.extend(new_mols)
         print(f'  made {len(new_mols)} analogues total now {len(all_new_mols)}')
 
@@ -456,12 +474,15 @@ def main(cli_args):
         new_mols = replace_linkers(args.query_smiles, args.db_file,
                                    args.max_heavies, args.max_bonds,
                                    args.plus_length, args.minus_length,
-                                   args.match_donors, args.match_acceptors)
+                                   args.match_donors, args.match_acceptors,
+                                   args.max_mols_per_input)
     else:
         new_mols = bulk_replace_linkers(args.input_file, args.db_file,
                                         args.max_heavies, args.max_bonds,
                                         args.plus_length, args.minus_length,
-                                        args.match_donors, args.match_acceptors)
+                                        args.match_donors,
+                                        args.match_acceptors,
+                                        args.max_mols_per_input)
     if new_mols is None or not new_mols:
         return False
 

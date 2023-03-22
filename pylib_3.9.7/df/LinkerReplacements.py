@@ -33,6 +33,7 @@ class LinkerReplacements(DataFunction):
         self._match_hbonds = False
         self._structure_column_name = None
         self._parent_mols = None
+        self._max_mols_per_input = 1000
         super().__init__()
 
     def extract_input_data(self, request: DataFunctionRequest) -> None:
@@ -44,6 +45,8 @@ class LinkerReplacements(DataFunction):
         self._minus_delta_bonds = integer_input_field(request,
                                                       'minusDeltaBonds')
         self._match_hbonds = boolean_input_field(request, 'matchHbonds')
+        self._max_mols_per_input = integer_input_field(request,
+                                                       'maxMolsPerInput')
         # column_id = string_input_field(request, 'idColumn')
         # id_column = request.inputColumns[column_id]
         # print(id_column.values)
@@ -68,7 +71,8 @@ class LinkerReplacements(DataFunction):
                                        plus_length=self._plus_delta_bonds,
                                        minus_length=self._minus_delta_bonds,
                                        match_donors=self._match_hbonds,
-                                       match_acceptors=self._match_hbonds)
+                                       match_acceptors=self._match_hbonds,
+                                       max_mols_per_input=self._max_mols_per_input)
             print(f'number of replacements : {len(new_mols)}')
             all_new_mols.extend(new_mols)
             parent_mols.extend([mol] * len(new_mols))
