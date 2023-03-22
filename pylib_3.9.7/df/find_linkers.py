@@ -36,11 +36,15 @@ class Linker:
 
     def __init__(self, name: str, linker_smiles: str, mol_smiles: str,
                  left_smiles: str, right_smiles: str,
-                 num_atoms: int, linker_length: int,
+                 linker_atoms: Union[list[int], set[int]], linker_length: int,
                  num_donors: int, num_acceptors: int):
         self.name = name
         self.linker_smiles = linker_smiles
-        self._num_atoms = num_atoms
+        # linker_atoms holds the indices of the atoms the linker in the
+        # original molecule i.e. the mol_smiles.  Obviously that
+        # assumes that the mol_smiles is in the same order as when
+        # the input molecule was dealt with.
+        self._linker_atoms = set(linker_atoms)
         self.mol_smiles = mol_smiles
         self.left_smiles = left_smiles
         self.right_smiles = right_smiles
@@ -81,7 +85,11 @@ class Linker:
 
     @property
     def num_atoms(self) -> int:
-        return self._num_atoms
+        return len(self._linker_atoms)
+
+    @property
+    def linker_atoms(self) -> Union[list[int], set[int]]:
+        return self._linker_atoms
 
     @property
     def symmetrical(self) -> bool:
@@ -460,6 +468,29 @@ def find_linker_bonds(mol: Chem.Mol, max_length: int) -> list[tuple[Chem.Bond, C
     return linker_bonds
 
 
+def add_linker_to_list(linker: Linker, all_linkers: list[Linker]) -> None:
+    """
+    Add the Linker to the list, if it isn't already there and if it
+    doesn't overlap with an existing Linker.  If it does overlap, keep
+    the one with the shorter path length.  An overlap must, by
+    definition, be complete i.e. linker_atoms of one is a subset of
+    linker_atoms of the other, and also the part of the larger must be
+    a ring.  The original case was
+    Cc1ccc(C(=O)N2CCCC(c3cccc(F)c3)C2)cc1 where the linkers
+    could be C1C(*)CCCN1C(=O)* and *C(=O)*.  Since they overlap, the
+    linker replacement code raised errors.
+    """
+    for i, al in enumerate(all_linkers):
+        # If it's a straight match, we're all good.
+        if al == linker:
+            return
+        if al.linker_atoms.intersection(linker.linker_atoms):
+            if linker.path_length < al.path_length:
+                all_linkers[i] = linker
+            return
+
+    all_linkers.append(linker)
+
 def count_donors_and_acceptors(mol: Chem.Mol) -> tuple[int, int]:
     """
     Count the number of donors and acceptors in the molecule.  Since
@@ -503,14 +534,19 @@ def find_linkers(mol_rec: tuple[str, str], max_heavies: int = 8,
     mol = Chem.MolFromSmiles(mol_rec[0])
     if mol is None or not mol:
         return mol_rec[1], []
+    # So as to be able to identify the linker atoms, add the atom
+    # indices as properties
+    for a in mol.GetAtoms():
+        a.SetIntProp('idx', a.GetIdx())
 
     linker_bonds = find_linker_bonds(mol, max_length)
 
     all_linkers = []
     for bond_pair in linker_bonds:
-        # print(f'Splitting on {bond1.GetBeginAtomIdx()} -> {bond1.GetEndAtomIdx()}'
-        #       f'  and {bond2.GetBeginAtomIdx()} -> {bond2.GetEndAtomIdx()}')
+        # print(f'Splitting on {bond_pair[0].GetBeginAtomIdx()} -> {bond_pair[0].GetEndAtomIdx()}'
+        #       f'  and {bond_pair[1].GetBeginAtomIdx()} -> {bond_pair[1].GetEndAtomIdx()}')
         left, linker, right = split_molecule(mol, bond_pair[0], bond_pair[1])
+        linker_atoms = [a.GetIntProp('idx') for a in linker.GetAtoms() if a.GetAtomicNum()]
         ok = linker_is_ok(linker, max_heavies)
         num_donors, num_acceptors = count_donors_and_acceptors(linker)
         if ok:
@@ -521,12 +557,12 @@ def find_linkers(mol_rec: tuple[str, str], max_heavies: int = 8,
                          mol_smiles=mol_smiles,
                          left_smiles=Chem.MolToSmiles(left),
                          right_smiles=Chem.MolToSmiles(right),
-                         num_atoms=linker.GetNumAtoms(),
+                         linker_atoms=linker_atoms,
                          linker_length=bond_pair[2],
                          num_donors=num_donors,
                          num_acceptors=num_acceptors)
-            if lnk not in all_linkers:
-                all_linkers.append(lnk)
+            add_linker_to_list(lnk, all_linkers)
+
             if not lnk.symmetrical:
                 # print(f'not symmetrical : {lnk.linker_smiles}')
                 rlsmi, rrsmi = lnk.reversed_sides
@@ -537,13 +573,12 @@ def find_linkers(mol_rec: tuple[str, str], max_heavies: int = 8,
                               mol_smiles=mol_smiles,
                               left_smiles=rlsmi,
                               right_smiles=rrsmi,
-                              num_atoms=lnk.num_atoms,
+                              linker_atoms=lnk.linker_atoms,
                               linker_length=bond_pair[2],
                               num_donors=num_donors,
                               num_acceptors=num_acceptors)
                 # print(f'final    : {lnk.linker_smiles} {lnk.left_smiles} {lnk.right_smiles}')
-                if rlnk not in all_linkers:
-                    all_linkers.append(rlnk)
+                add_linker_to_list(lnk, all_linkers)
 
     # print(f'{Chem.MolToSmiles(mol)} gave {len(all_linkers)}')
     return mol_rec[1], all_linkers
@@ -1053,7 +1088,7 @@ def read_molecules(infile: str, rand_frac: float) -> Optional[list[tuple[str, st
     if suppl is None:
         return None
 
-    for i, mol in tqdm(enumerate(suppl)):
+    for i, mol in enumerate(suppl):
         if not mol or not mol.GetNumAtoms():
             continue
         if random.random() > rand_frac:

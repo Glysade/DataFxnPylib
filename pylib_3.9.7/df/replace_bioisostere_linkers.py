@@ -133,7 +133,8 @@ def make_new_smiles(mol_smi: str, linker_smi: str, bios: list[str]) -> list[str]
 
 
 def split_input_smiles(query_smiles: str, linker_smis: list[str],
-                       max_heavies: int, max_bonds: int) -> str:
+                       max_heavies: int, max_bonds: int,
+                       linker_num: list[int]) -> str:
     """
     Take the molecule and split on any linkers to produce a
     fragmented SMILES with linkers and pieces, with the dummy map
@@ -144,22 +145,24 @@ def split_input_smiles(query_smiles: str, linker_smis: list[str],
     """
     new_smi = query_smiles
     _, linkers = fl.find_linkers((new_smi, ''), max_heavies=max_heavies, max_length=max_bonds)
-    # print(f'depth = {len(linker_smis)} : num linkers {len(linkers)}')
+    # print(f'depth = {len(linker_smis)} : linker num {linker_num[0]}')
     if not linkers:
         return query_smiles
 
-    i = len(linkers) + 1
-    new1 = f'[*:{2 * i - 1}]'
-    new2 = f'[*:{2 * i}]'
+    new1 = f'[*:{2 * linker_num[0] - 1}]'
+    new2 = f'[*:{2 * linker_num[0]}]'
+    linker_num[0] += 1
     new_linker = linkers[0].linker_smiles.replace('[*:1]', new1).replace('[*:2]', new2)
     linker_smis.append(new_linker)
     new_left_smi = linkers[0].left_smiles.replace('[*:1]', new1)
     new_right_smi = linkers[0].right_smiles.replace('[*:2]', new2)
-    # print(new_linker)
-    # print(new_left_smi)
-    # print(new_right_smi)
-    new_left_smi = split_input_smiles(new_left_smi, linker_smis, max_heavies, max_bonds)
-    new_right_smi = split_input_smiles(new_right_smi, linker_smis, max_heavies, max_bonds)
+    # print(f'linker : {new_linker}')
+    # print(f'left smi : {new_left_smi}')
+    # print(f'right_smi : {new_right_smi}')
+    new_left_smi = split_input_smiles(new_left_smi, linker_smis, max_heavies, max_bonds,
+                                      linker_num)
+    new_right_smi = split_input_smiles(new_right_smi, linker_smis, max_heavies, max_bonds,
+                                       linker_num)
 
     new_smi = f'{new_left_smi}.{new_linker}.{new_right_smi}'
     return new_smi
@@ -193,8 +196,9 @@ def replace_linkers(query_smiles: str, db_file: str,
         new molecules
     """
     linker_smis = []
+    linker_num = [3]
     split_smi = split_input_smiles(query_smiles, linker_smis, max_heavies,
-                                   max_bonds)
+                                   max_bonds, linker_num)
     # print(f'split_smi : {split_smi}')
     # print(f'linker_smis : {linker_smis}')
     # for l in linker_smis:
@@ -263,12 +267,13 @@ def bulk_replace_linkers(mol_file: str, db_file: str,
     for mol in suppl:
         if not mol or not mol.GetNumAtoms():
             continue
-        # print(f'Doing {mol.GetProp("_Name")}')
+        print(f'Doing {mol.GetProp("_Name")}', flush=True)
         mol_smi = Chem.MolToSmiles(mol)
         new_mols = replace_linkers(mol_smi, db_file, max_heavies, max_bonds,
                                    plus_length, minus_length, match_donors,
                                    match_acceptors)
         all_new_mols.extend(new_mols)
+        print(f'  made {len(new_mols)} analogues total now {len(all_new_mols)}')
 
     return all_new_mols
 
