@@ -234,9 +234,10 @@ def add_linker_color_props(mol: Chem.Mol) -> None:
         except KeyError:
             pass
 
+    # The atom and bond numbers in Renderer_Highlight start from 1.
     high_str = ''
     for col, atoms in linker_atoms.items():
-        at_list = ' '.join([str(a) for a in atoms])
+        at_list = ' '.join([str(a+1) for a in atoms])
         high_str += f'COLOR {LINKER_COLORS[col]}\nATOMS {at_list}\nBONDS\n'
 
     if high_str:
