@@ -225,20 +225,32 @@ def add_linker_color_props(mol: Chem.Mol) -> None:
     Add to the molecule the properties necessary for colouring the
     linkers in Spotfire.
     """
-    linker_atoms = defaultdict(list)
+    linker_atoms = defaultdict(set)
     for a in mol.GetAtoms():
         try:
             linker_num = a.GetIntProp('Linker')
             col_num = linker_num % len(LINKER_COLORS)
-            linker_atoms[col_num].append(a.GetIdx())
+            linker_atoms[col_num].add(a.GetIdx())
+            for nbr in a.GetNeighbors():
+                linker_atoms[col_num].add(nbr.GetIdx())
         except KeyError:
             pass
 
+    linker_bonds = defaultdict(set)
+    for col, atoms in linker_atoms.items():
+        for a1 in atoms:
+            for a2 in atoms:
+                if a1 != a2:
+                    bond = mol.GetBondBetweenAtoms(a1, a2)
+                    if bond is not None:
+                        linker_bonds[col].add(bond.GetIdx())
+
     # The atom and bond numbers in Renderer_Highlight start from 1.
     high_str = ''
-    for col, atoms in linker_atoms.items():
-        at_list = ' '.join([str(a+1) for a in atoms])
-        high_str += f'COLOR {LINKER_COLORS[col]}\nATOMS {at_list}\nBONDS\n'
+    for col in linker_atoms.keys():
+        at_list = ' '.join([str(a+1) for a in linker_atoms[col]])
+        bo_list = ' '.join([str(b+1) for b in linker_bonds[col]])
+        high_str += f'COLOR {LINKER_COLORS[col]}\nATOMS {at_list}\nBONDS {bo_list}\n'
 
     if high_str:
         mol.SetProp('Renderer_Highlight', high_str)
