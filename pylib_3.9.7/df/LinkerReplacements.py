@@ -65,16 +65,17 @@ class LinkerReplacements(DataFunction):
             if mol is None or not mol:
                 continue
             print(f'doing {Chem.MolToSmiles(mol)}')
-            new_mols = replace_linkers(mol, LINKER_DB,
-                                       max_heavies=MAX_HEAVIES, max_bonds=MAX_BONDS,
-                                       plus_length=self._plus_delta_bonds,
-                                       minus_length=self._minus_delta_bonds,
-                                       match_donors=self._match_hbonds,
-                                       match_acceptors=self._match_hbonds,
-                                       max_mols_per_input=self._max_mols_per_input)
+            new_mols, query_cp = \
+                replace_linkers(mol, LINKER_DB, max_heavies=MAX_HEAVIES,
+                                max_bonds=MAX_BONDS,
+                                plus_length=self._plus_delta_bonds,
+                                minus_length=self._minus_delta_bonds,
+                                match_donors=self._match_hbonds,
+                                match_acceptors=self._match_hbonds,
+                                max_mols_per_input=self._max_mols_per_input)
             print(f'number of replacements : {len(new_mols)}')
             all_new_mols.extend(new_mols)
-            parent_mols.extend([mol] * len(new_mols))
+            parent_mols.extend([query_cp] * len(new_mols))
 
         return all_new_mols, parent_mols
 
