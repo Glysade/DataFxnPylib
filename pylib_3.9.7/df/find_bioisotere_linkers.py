@@ -461,7 +461,8 @@ def find_bioisosteres_in_series(series: dict[str, Union[str, list[str]]],
                     if linker_i == linker_j:
                         continue
                     linker_j_mutant = copy.copy(linker_j)
-                    linker_j_mutant.linker_smiles = linker_i.linker_smiles
+                    linker_j_mutant._linker = linker_i._linker
+                    linker_j_mutant._linker_smiles = None
                     if linker_i == linker_j_mutant:
                         new_bio = Bioisostere(linker_i, linker_j, series['doc'])
                         add_bioisosteres_if_different(new_bio, bioisosteres)
@@ -799,8 +800,8 @@ def add_linkers_to_table(conn: sqlite3.Connection, bios: Bioisostere,
     """
     curs = conn.cursor()
     for ex in bios.examples:
-        l1_id = add_linker_to_table(curs, ex[0], bios_id)
-        l2_id = add_linker_to_table(curs, ex[1], bios_id)
+        _ = add_linker_to_table(curs, ex[0], bios_id)
+        _ = add_linker_to_table(curs, ex[1], bios_id)
     conn.commit()
 
 
@@ -849,11 +850,12 @@ def main(cli_args):
                                         args.max_bonds, args.min_examples,
                                         args.num_procs)
 
-    # for bios in bioisosteres:
-    #     print(bios)
-    #     for ex in bios.examples:
-    #         print(f'  {ex[0].name} {ex[0].mol_smiles} ::'
-    #               f' {ex[1].name} {ex[1].mol_smiles}')
+    print(f'Number of bioisosteres : {len(bioisosteres)}')
+    for bios in bioisosteres:
+        print(bios)
+        for ex in bios.examples:
+            print(f'  {ex[0].name} {ex[0].mol_smiles} ::'
+                  f' {ex[1].name} {ex[1].mol_smiles}')
 
     if args.html_file is not None:
         write_bioisostere_table(bioisosteres, html_file=args.html_file,

@@ -65,8 +65,7 @@ class LinkerReplacements(DataFunction):
             if mol is None or not mol:
                 continue
             print(f'doing {Chem.MolToSmiles(mol)}')
-            smi = Chem.MolToSmiles(mol)
-            new_mols = replace_linkers(smi, LINKER_DB,
+            new_mols = replace_linkers(mol, LINKER_DB,
                                        max_heavies=MAX_HEAVIES, max_bonds=MAX_BONDS,
                                        plus_length=self._plus_delta_bonds,
                                        minus_length=self._minus_delta_bonds,

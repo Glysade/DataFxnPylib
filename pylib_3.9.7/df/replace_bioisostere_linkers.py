@@ -144,80 +144,125 @@ def make_new_smiles(mol_smi: str, linker_smi: str, bios: list[str]) -> list[str]
     return new_smis
 
 
-def split_input_smiles(query_smiles: str, linker_smis: list[str],
+def make_new_mols(mol: Chem.Mol, linker_smi: str, bios: list[str],
+                  linker_num: int) -> list[Chem.Mol]:
+    """
+    Take the fragmented SMILES string, the SMILES of the current
+    linker of interest and a list of bioisostere SMILES and make SMILES
+    strings of molecules where the linker is replaced by the
+    bioisosteres.  The new molecules are not zipped up, because
+    there may be more substitutions to make.  The new linkers, from
+    the bioisostere list, are flagged with linker_num as the 'Linker'
+    property for the atoms.
+    Args:
+        mol_smi: fragmented SMILES string
+        linker_smi: SMILES string of current linker of interest
+        bios: list of SMILES strings to be attached to left and right
+              SMILES
+        linker_num: number of linker, used to set properties on linker
+                    atoms
+
+    Returns:
+        list of new SMILES strings, still in fragmented form.
+    """
+    # print(f'Making new mols for {Chem.MolToSmiles(mol)}')
+    # print('bios are')
+    # for b in bios:
+    #     print(b)
+    if not bios:
+        return [mol]
+
+    fb = Chem.MolFromSmiles(bios[0])
+    dummies = get_dummy_map_nums_from_molecule(fb)
+    base_mol = Chem.RWMol()
+    for frag in rdmolops.GetMolFrags(mol, asMols=True, sanitizeFrags=False):
+        frag_dummies = get_dummy_map_nums_from_molecule(frag)
+        if frag_dummies != dummies:
+            base_mol.InsertMol(frag)
+
+    params = rdmolops.MolzipParams()
+    params.label = rdmolops.MolzipLabel.AtomMapNumber
+    new_mols = []
+    for b in bios:
+        bfrag = Chem.MolFromSmiles(b)
+        for ba in bfrag.GetAtoms():
+            ba.SetIntProp('Linker', linker_num)
+
+        new_mol = Chem.RWMol(base_mol)
+        new_mol.InsertMol(bfrag)
+        new_mols.append(new_mol)
+
+    return new_mols
+
+
+def alter_atom_maps(mol: Chem.Mol, new_maps: list[tuple[int, int]]):
+    """
+    Change the atom map numbers from the first in each tuple to the
+    second. Assumes there's no overlap i.e. it won't be changing
+    1 -> 2 and then 2 -> 3.
+    """
+    for a in mol.GetAtoms():
+        for nm in new_maps:
+            if a.GetAtomMapNum() == nm[0]:
+                a.SetAtomMapNum(nm[1])
+                break
+
+
+def split_input_smiles(query_mol: Chem.Mol, linker_smis: list[str],
                        max_heavies: int, max_bonds: int,
-                       linker_num: list[int]) -> str:
+                       linker_num: list[int]) -> Chem.Mol:
     """
     Take the molecule and split on any linkers to produce a
     fragmented SMILES with linkers and pieces, with the dummy map
     numbers adjusted so that multiple linkers don't have the same
-    values.
+    values.  Do it recursively so that the end product is one molecule
+    split at all linkers.  fl.find_linkers returns a list of single
+    linker breaks.
     e.g. split c1ccccc1CCc1cnccc1OCOc1ccccc1 into
     [*:1]c1ccccc1.[*:1]CC[*:2].[*:2]c1cnccc1[*:3].[*:3]OCO[*:4].[*:4]c1ccccc1
     """
-    new_smi = query_smiles
-    _, linkers = fl.find_linkers((new_smi, ''), max_heavies=max_heavies, max_length=max_bonds)
+    new_mol = Chem.Mol(query_mol)
+    _, linkers = fl.find_linkers((new_mol, ''), max_heavies=max_heavies,
+                                 max_length=max_bonds)
     # print(f'depth = {len(linker_smis)} : linker num {linker_num[0]}')
     if not linkers:
-        return query_smiles
+        return query_mol
+    # for l in linkers:
+    #     print(l)
 
-    new1 = f'[*:{2 * linker_num[0] - 1}]'
-    new2 = f'[*:{2 * linker_num[0]}]'
     linker_num[0] += 1
-    new_linker = linkers[0].linker_smiles.replace('[*:1]', new1).replace('[*:2]', new2)
-    linker_smis.append(new_linker)
-    new_left_smi = linkers[0].left_smiles.replace('[*:1]', new1)
-    new_right_smi = linkers[0].right_smiles.replace('[*:2]', new2)
-    # print(f'linker : {new_linker}')
-    # print(f'left smi : {new_left_smi}')
-    # print(f'right_smi : {new_right_smi}')
-    new_left_smi = split_input_smiles(new_left_smi, linker_smis, max_heavies, max_bonds,
-                                      linker_num)
-    new_right_smi = split_input_smiles(new_right_smi, linker_smis, max_heavies, max_bonds,
-                                       linker_num)
+    new_maps = [(1, 2 * linker_num[0] - 1), (2, 2 * linker_num[0])]
+    new_linker = Chem.Mol(linkers[0]._linker)
+    alter_atom_maps(new_linker, new_maps)
+    new_left_mol = Chem.Mol(linkers[0]._left_mol)
+    alter_atom_maps(new_left_mol, new_maps)
+    new_right_mol = Chem.Mol(linkers[0]._right_mol)
+    alter_atom_maps(new_right_mol, new_maps)
 
-    new_smi = f'{new_left_smi}.{new_linker}.{new_right_smi}'
-    return new_smi
+    linker_smis.append(Chem.MolToSmiles(new_linker))
+    new_left_mol = split_input_smiles(new_left_mol, linker_smis, max_heavies,
+                                      max_bonds, linker_num)
+    new_right_mol = split_input_smiles(new_right_mol, linker_smis, max_heavies,
+                                       max_bonds, linker_num)
 
-
-def flag_linkers(mol: Chem.Mol) -> Chem.Mol:
-    """
-    Return a copy of the input molecule with the atoms in the different
-    linkers tagged with the property Linker having the values 1, 2,
-     3...  The input molecule is assumed to contain the fragments of
-     new molecule that haven't been zipped up yet.
-    """
-    frags = rdmolops.GetMolFrags(mol, asMols=True, sanitizeFrags=False)
-    linker_frags = []
-    for i, frag in enumerate(frags):
-        dummies = []
-        for a in frag.GetAtoms():
-            if not a.GetAtomicNum():
-                dummies.append(a.GetAtomMapNum())
-        if len(dummies) != 2:
-            continue
-        if dummies[0] > dummies[1]:
-            dummies[0], dummies[1] = dummies[1], dummies[0]
-        # For it to be a linker, there will be 2 dummies, the lower
-        # will have an odd map number and the higher will be one more
-        # than the lower.  It's possible that there will be fragments
-        # that aren't linkers that have 2 dummies, but they won't
-        # follow these rules.
-        if dummies[0] % 2 and dummies[1] == dummies[0] + 1:
-            linker_num = dummies[1] // 2
-            linker_frags.append((linker_num, i))
-
-    linker_frags.sort(key=lambda ln: ln[0])
-    for i, linker_frag in enumerate(linker_frags):
-        for a in frags[linker_frag[1]].GetAtoms():
-            a.SetIntProp('Linker', i)
-
-    # Now build a new molecule with the labelled frags
     new_mol = Chem.RWMol()
-    for frag in frags:
-        new_mol.InsertMol(frag)
-
+    new_mol.InsertMol(new_left_mol)
+    new_mol.InsertMol(new_linker)
+    new_mol.InsertMol(new_right_mol)
     return new_mol
+
+
+def get_dummy_map_nums_from_molecule(mol: Chem.Mol) -> list[int]:
+    """
+    Returns a sorted list of the map numbers of dummy atoms in the
+    molecule.
+    """
+    dummies = []
+    for a in mol.GetAtoms():
+        if not a.GetAtomicNum():
+            dummies.append(a.GetAtomMapNum())
+    dummies.sort()
+    return dummies
 
 
 def add_linker_color_props(mol: Chem.Mol) -> None:
@@ -256,7 +301,7 @@ def add_linker_color_props(mol: Chem.Mol) -> None:
         mol.SetProp('Renderer_Highlight', high_str)
 
 
-def replace_linkers(query_smiles: str, db_file: str,
+def replace_linkers(query_mol: Chem.Mol, db_file: str,
                     max_heavies: int, max_bonds: int,
                     plus_length: int, minus_length: int,
                     match_donors: bool, match_acceptors: bool,
@@ -287,19 +332,24 @@ def replace_linkers(query_smiles: str, db_file: str,
     Returns:
         new molecules
     """
+    if query_mol is None or not query_mol:
+        return []
+
     linker_smis = []
     linker_num = [3]
-    split_smi = split_input_smiles(query_smiles, linker_smis, max_heavies,
+    # print(f'query-mol : {Chem.MolToSmiles(query_mol)}')
+    split_mol = split_input_smiles(query_mol, linker_smis, max_heavies,
                                    max_bonds, linker_num)
-    # print(f'split_smi : {split_smi}')
+    # print(f'split_mol : {Chem.MolToSmiles(split_mol)}')
     # print(f'linker_smis : {linker_smis}')
     # for l in linker_smis:
     #     print(f'linker_smi : {l}')
     if not linker_smis:
         return []
 
-    new_smis = [split_smi]
-    for lsmi in linker_smis:
+    new_mols = [split_mol]
+    for i, lsmi in enumerate(linker_smis, 1):
+        # print(f'{i} : {lsmi}')
         bios = fetch_bioisosteres(lsmi, db_file, plus_length, minus_length,
                                   match_donors, match_acceptors)
         # If there aren't any bioisosteres for this linker, leave it
@@ -307,27 +357,22 @@ def replace_linkers(query_smiles: str, db_file: str,
         # print(f'linker {lsmi} has {len(bios)} replacements : {bios}')
         if not bios:
             bios = [lsmi]
-        next_new_smis = []
-        for nm in new_smis:
-            next_new_smis.extend(make_new_smiles(nm, lsmi, bios))
-        new_smis = next_new_smis
+        next_new_mols = []
+        for nm in new_mols:
+            next_new_mols.extend(make_new_mols(nm, lsmi, bios, i))
+        new_mols = next_new_mols
 
-    if len(new_smis) > max_mols_per_input:
-        shuffle(new_smis)
-        new_smis = new_smis[:max_mols_per_input]
+    if len(new_mols) > max_mols_per_input:
+        shuffle(new_mols)
+        new_mols = new_mols[:max_mols_per_input]
 
-    new_mols = []
-    for new_smi in new_smis:
-        mol = Chem.MolFromSmiles(new_smi)
-        if mol is None:
-            print(f'Warning: SMILES {query_smiles} gave invalid product {new_smi}.')
-            continue
-        flagged_mol = flag_linkers(mol)
-        zip_mol = rdmolops.molzip(flagged_mol)
+    zipped_mols = []
+    for new_mol in new_mols:
+        zip_mol = rdmolops.molzip(new_mol)
         add_linker_color_props(zip_mol)
-        new_mols.append(zip_mol)
+        zipped_mols.append(zip_mol)
 
-    return new_mols
+    return zipped_mols
 
 
 def bulk_replace_linkers(mol_file: str, db_file: str,
@@ -367,12 +412,14 @@ def bulk_replace_linkers(mol_file: str, db_file: str,
         if not mol or not mol.GetNumAtoms():
             continue
         print(f'Doing {mol.GetProp("_Name")}', flush=True)
+        # Send it in and out of SMILES so it is in canonical SMILES order.
         mol_smi = Chem.MolToSmiles(mol)
-        new_mols = replace_linkers(mol_smi, db_file, max_heavies, max_bonds,
+        mol = Chem.MolFromSmiles(mol_smi)
+        new_mols = replace_linkers(mol, db_file, max_heavies, max_bonds,
                                    plus_length, minus_length, match_donors,
                                    match_acceptors, max_mols_per_input)
         all_new_mols.extend(new_mols)
-        print(f'  made {len(new_mols)} analogues total now {len(all_new_mols)}')
+        # print(f'  made {len(new_mols)} analogues total now {len(all_new_mols)}')
 
     return all_new_mols
 
@@ -478,27 +525,36 @@ def fetch_bioisosteres(linker_smi: str, db_file: str,
     # print(f'searching {linker_smi} : dummy matches : {dummy_matches}')
     new1 = f'[*:{dummy_matches[0]}]'
     new2 = f'[*:{dummy_matches[1]}]'
-    mended_smi = linker_smi.replace(new1, '[*:1]').replace(new2, '[*:2]')
+    # Left and right are completely arbitrary for this - a minor change
+    # to a molecule can change the canonical order of the atoms such
+    # that the linker comes out with the reversed atom maps. Thus,
+    # search for both ways round.
+    mended_smi1 = linker_smi.replace(new1, '[*:1]').replace(new2, '[*:2]')
+    mended_smi2 = linker_smi.replace(new1, '[*:2]').replace(new2, '[*:1]')
 
     conn = sqlite3.connect(db_file)
     sql = """SELECT linker1_smiles, linker2_smiles FROM bioisosteres
-    WHERE linker1_smiles = ? or linker2_smiles = ?"""
-    linkers = conn.execute(sql, (mended_smi, mended_smi)).fetchall()
+    WHERE linker1_smiles = ? OR linker2_smiles = ?
+    OR linker1_smiles = ? OR linker2_smiles = ?"""
+    linkers = conn.execute(sql, (mended_smi1, mended_smi1, mended_smi2,
+                                 mended_smi2)).fetchall()
     if not linkers:
         return []
 
     bios = []
     for linker in linkers:
-        if linker[0] == mended_smi:
+        if linker[0] == mended_smi1 or linker[0] == mended_smi2:
             bios.append(linker[1])
         else:
             bios.append(linker[0])
 
-    bios = trim_linkers_by_length(conn, mended_smi, bios, plus_length,
+    # For the trimming, only one of the fragments need be examined, as
+    # the properties being tested are invariant on reversal.
+    bios = trim_linkers_by_length(conn, mended_smi1, bios, plus_length,
                                   minus_length)
 
     if match_donors or match_donors:
-        bios = trim_linkers_by_hbonding(conn, mended_smi, bios, match_donors,
+        bios = trim_linkers_by_hbonding(conn, mended_smi1, bios, match_donors,
                                         match_acceptors)
 
     bios = [b.replace('[*:1]', new1).replace('[*:2]', new2) for b in bios]

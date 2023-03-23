@@ -34,20 +34,25 @@ class Linker:
     pieces off the linker and the whole of the parent molecule.
     """
 
-    def __init__(self, name: str, linker_smiles: str, mol_smiles: str,
-                 left_smiles: str, right_smiles: str,
+    def __init__(self, name: str, linker: str, mol: Chem.Mol,
+                 left_mol: Chem.Mol, right_mol: Chem.Mol,
                  linker_atoms: Union[list[int], set[int]], linker_length: int,
                  num_donors: int, num_acceptors: int):
         self.name = name
-        self.linker_smiles = linker_smiles
+        self._linker = linker
         # linker_atoms holds the indices of the atoms the linker in the
         # original molecule i.e. the mol_smiles.  Obviously that
         # assumes that the mol_smiles is in the same order as when
         # the input molecule was dealt with.
         self._linker_atoms = set(linker_atoms)
-        self.mol_smiles = mol_smiles
-        self.left_smiles = left_smiles
-        self.right_smiles = right_smiles
+        self._mol = mol
+        self._left_mol = left_mol
+        self._right_mol = right_mol
+
+        self._linker_smiles = None
+        self._mol_smiles = None
+        self._left_smiles = None
+        self._right_smiles = None
 
         self._reversed_linker = None
         self._reversed_left_smiles = None
@@ -78,6 +83,30 @@ class Linker:
             if olsmi == other.left_smiles and orsmi == other.right_smiles:
                 return True
         return False
+
+    @property
+    def linker_smiles(self) -> str:
+        if self._linker_smiles is None:
+            self._linker_smiles = Chem.MolToSmiles(self._linker)
+        return self._linker_smiles
+
+    @property
+    def mol_smiles(self) -> str:
+        if self._mol_smiles is None:
+            self._mol_smiles = Chem.MolToSmiles(self._mol)
+        return self._mol_smiles
+
+    @property
+    def left_smiles(self) -> str:
+        if self._left_smiles is None:
+            self._left_smiles = Chem.MolToSmiles(self._left_mol)
+        return self._left_smiles
+
+    @property
+    def right_smiles(self) -> str:
+        if self._right_smiles is None:
+            self._right_smiles = Chem.MolToSmiles(self._right_mol)
+        return self._right_smiles
 
     @property
     def path_length(self) -> int:
@@ -484,7 +513,8 @@ def add_linker_to_list(linker: Linker, all_linkers: list[Linker]) -> None:
         # If it's a straight match, we're all good.
         if al == linker:
             return
-        if al.linker_atoms.intersection(linker.linker_atoms):
+        if (al.linker_atoms != linker.linker_atoms
+                and al.linker_atoms.intersection(linker.linker_atoms)):
             if linker.path_length < al.path_length:
                 all_linkers[i] = linker
             return
@@ -515,7 +545,7 @@ def count_donors_and_acceptors(mol: Chem.Mol) -> tuple[int, int]:
     return num_donors, num_acceptors
 
 
-def find_linkers(mol_rec: tuple[str, str], max_heavies: int = 8,
+def find_linkers(mol_rec: tuple[Chem.Mol, str], max_heavies: int = 8,
                  max_length: int = 5) -> tuple[str, list[Linker]]:
     """
     Return the SMILES strings of all linkers found in the molecule,
@@ -531,7 +561,7 @@ def find_linkers(mol_rec: tuple[str, str], max_heavies: int = 8,
         list of dicts containing the linkers and details about them.
     """
     # print(f'find_linkers for {mol_rec[0]} : {mol_rec[1]}')
-    mol = Chem.MolFromSmiles(mol_rec[0])
+    mol = mol_rec[0]
     if mol is None or not mol:
         return mol_rec[1], []
     # So as to be able to identify the linker atoms, add the atom
@@ -553,10 +583,10 @@ def find_linkers(mol_rec: tuple[str, str], max_heavies: int = 8,
             # print(f'Linker {Chem.MolToSmiles(linker)} ok.')
             mol_smiles = Chem.MolToSmiles(mol)
             lnk = Linker(name=mol_rec[1],
-                         linker_smiles=Chem.MolToSmiles(linker),
-                         mol_smiles=mol_smiles,
-                         left_smiles=Chem.MolToSmiles(left),
-                         right_smiles=Chem.MolToSmiles(right),
+                         linker=linker,
+                         mol=mol,
+                         left_mol=left,
+                         right_mol=right,
                          linker_atoms=linker_atoms,
                          linker_length=bond_pair[2],
                          num_donors=num_donors,
@@ -564,21 +594,17 @@ def find_linkers(mol_rec: tuple[str, str], max_heavies: int = 8,
             add_linker_to_list(lnk, all_linkers)
 
             if not lnk.symmetrical:
-                # print(f'not symmetrical : {lnk.linker_smiles}')
                 rlsmi, rrsmi = lnk.reversed_sides
-                # print(f'orig     : {lnk.linker_smiles} {lnk.left_smiles} {lnk.right_smiles}')
-                # print(f'reversed : {lnk.reversed_linker} {rlsmi} {rrsmi}')
                 rlnk = Linker(name=mol_rec[1],
-                              linker_smiles=lnk.reversed_linker,
-                              mol_smiles=mol_smiles,
-                              left_smiles=rlsmi,
-                              right_smiles=rrsmi,
+                              linker=Chem.MolFromSmiles(lnk.reversed_linker),
+                              mol=mol,
+                              left_mol=Chem.MolFromSmiles(rlsmi),
+                              right_mol=Chem.MolFromSmiles(rrsmi),
                               linker_atoms=lnk.linker_atoms,
                               linker_length=bond_pair[2],
                               num_donors=num_donors,
                               num_acceptors=num_acceptors)
-                # print(f'final    : {lnk.linker_smiles} {lnk.left_smiles} {lnk.right_smiles}')
-                add_linker_to_list(lnk, all_linkers)
+                add_linker_to_list(rlnk, all_linkers)
 
     # print(f'{Chem.MolToSmiles(mol)} gave {len(all_linkers)}')
     return mol_rec[1], all_linkers
@@ -610,7 +636,7 @@ def serial_find_all_linkers(input_mols: list[tuple[str, str]], max_heavies: int 
     """
     Do the linker search in serial
     Args:
-        input_mols:
+        input_mols: list of tuples, SMILES string and molecule name.
         max_heavies:
         max_length:
         silent: if True, doesn't use the progress bar
@@ -621,7 +647,9 @@ def serial_find_all_linkers(input_mols: list[tuple[str, str]], max_heavies: int 
     all_linkers = defaultdict(list)
 
     for i, mol_rec in enumerate(input_mols):
-        mol_name, linkers = find_linkers(mol_rec, max_heavies, max_length)
+        mol = Chem.MolFromSmiles(mol_rec[0])
+        mol_name, linkers = find_linkers((mol, mol_rec[1]), max_heavies,
+                                         max_length)
         for lnk in linkers:
             all_linkers[lnk.linker_smiles].append(lnk)
 
@@ -644,39 +672,38 @@ def parallel_find_all_linkers(input_mols: list[tuple[str, str]], num_procs: int,
 
     """
     all_linkers = defaultdict(list)
-    # chunk_size = 100000
-    # next_start = 0
-    # num_mols = len(input_mols)
-    # with tqdm(total=len(input_mols)) as pbar:
-    #     while next_start < num_mols:
-    #         with cf.ProcessPoolExecutor(max_workers=cpu_count() - 1) as pool:
-    #             futures = []
-    #             print(f'Submitting {next_start} to {next_start + chunk_size}')
-    #             for i, mol in enumerate(input_mols[next_start:next_start + chunk_size]):
-    #                 fut = pool.submit(find_linkers, mol, next_start + i,
-    #                                   max_heavies, max_length)
-    #                 futures.append(fut)
-    #
-    #             for fut in cf.as_completed(futures):
-    #                 mol_name, linkers = fut.result()
-    #                 for linker in linkers:
-    #                     all_linkers[linker.linker_smiles].append(linker)
-    #                 pbar.update(1)
-    #         next_start += chunk_size
+    chunk_size = 100000
+    next_start = 0
+    num_mols = len(input_mols)
+    while next_start < num_mols:
+        with cf.ProcessPoolExecutor(max_workers=cpu_count() - 1) as pool:
+            futures = []
+            print(f'Submitting {next_start} to {next_start + chunk_size}')
+            for i, mol_rec in enumerate(input_mols[next_start:next_start + chunk_size]):
+                mol = Chem.MolFromSmiles(mol_rec[0])
+                fut = pool.submit(find_linkers, (mol, mol_rec[1]),
+                                  next_start + i, max_heavies, max_length)
+                futures.append(fut)
 
-    if len(input_mols) > 20:
-        chunk_size = 1
-    else:
-        chunk_size = 20
-    with cf.ProcessPoolExecutor(max_workers=cpu_count() - 1) as pool:
-        for mol_name, linkers in cf.map(find_linkers, input_mols,
-                                             repeat(max_heavies),
-                                             repeat(max_length),
-                                             max_workers=num_procs,
-                                             chunksize=chunk_size,
-                                             disable=silent):
-            for linker in linkers:
-                all_linkers[linker.linker_smiles].append(linker)
+            for fut in cf.as_completed(futures):
+                mol_name, linkers = fut.result()
+                for linker in linkers:
+                    all_linkers[linker.linker_smiles].append(linker)
+        next_start += chunk_size
+
+    # if len(input_mols) > 20:
+    #     chunk_size = 1
+    # else:
+    #     chunk_size = 20
+    # with cf.ProcessPoolExecutor(max_workers=cpu_count() - 1) as pool:
+    #     for mol_name, linkers in cf.map(find_linkers, input_mols,
+    #                                          repeat(max_heavies),
+    #                                          repeat(max_length),
+    #                                          max_workers=num_procs,
+    #                                          chunksize=chunk_size,
+    #                                          disable=silent):
+    #         for linker in linkers:
+    #             all_linkers[linker.linker_smiles].append(linker)
     return all_linkers
 
 
@@ -1075,7 +1102,9 @@ def read_molecules(infile: str, rand_frac: float) -> Optional[list[tuple[str, st
     Read all molecules up front, so we can process them in parallel.
     Save them as SMILES strings to reduce the memory use at the expense
     of a bit of extra processing.  When running in parallel, memory is
-    pretty critical.
+    pretty critical.  And also ensures that the molecules, when
+    processed, are in canonical SMILES order, which is important for
+    atom book-keeping in the Linker objects.
     Args:
         infile: SMILES, SDF or gzipped SDF.
         rand_frac: random fraction of input file to process
