@@ -8,6 +8,7 @@ import re
 import sqlite3
 import sys
 
+from collections import defaultdict
 from pathlib import Path
 from random import shuffle
 from typing import Optional
@@ -17,6 +18,8 @@ from rdkit.Chem import rdmolops
 
 import df.find_linkers as fl
 from df.int_range import IntRange
+
+LINKER_COLORS = ['#f0f060', '#14aadb', '#3beb24', '#000080']
 
 
 def parse_args(cli_args: list[str]):
@@ -177,6 +180,69 @@ def split_input_smiles(query_smiles: str, linker_smis: list[str],
     return new_smi
 
 
+def flag_linkers(mol: Chem.Mol) -> Chem.Mol:
+    """
+    Return a copy of the input molecule with the atoms in the different
+    linkers tagged with the property Linker having the values 1, 2,
+     3...  The input molecule is assumed to contain the fragments of
+     new molecule that haven't been zipped up yet.
+    """
+    frags = rdmolops.GetMolFrags(mol, asMols=True, sanitizeFrags=False)
+    linker_frags = []
+    for i, frag in enumerate(frags):
+        dummies = []
+        for a in frag.GetAtoms():
+            if not a.GetAtomicNum():
+                dummies.append(a.GetAtomMapNum())
+        if len(dummies) != 2:
+            continue
+        if dummies[0] > dummies[1]:
+            dummies[0], dummies[1] = dummies[1], dummies[0]
+        # For it to be a linker, there will be 2 dummies, the lower
+        # will have an odd map number and the higher will be one more
+        # than the lower.  It's possible that there will be fragments
+        # that aren't linkers that have 2 dummies, but they won't
+        # follow these rules.
+        if dummies[0] % 2 and dummies[1] == dummies[0] + 1:
+            linker_num = dummies[1] // 2
+            linker_frags.append((linker_num, i))
+
+    linker_frags.sort(key=lambda ln: ln[0])
+    for i, linker_frag in enumerate(linker_frags):
+        for a in frags[linker_frag[1]].GetAtoms():
+            a.SetIntProp('Linker', i)
+
+    # Now build a new molecule with the labelled frags
+    new_mol = Chem.RWMol()
+    for frag in frags:
+        new_mol.InsertMol(frag)
+
+    return new_mol
+
+
+def add_linker_color_props(mol: Chem.Mol) -> None:
+    """
+    Add to the molecule the properties necessary for colouring the
+    linkers in Spotfire.
+    """
+    linker_atoms = defaultdict(list)
+    for a in mol.GetAtoms():
+        try:
+            linker_num = a.GetIntProp('Linker')
+            col_num = linker_num % len(LINKER_COLORS)
+            linker_atoms[col_num].append(a.GetIdx())
+        except KeyError:
+            pass
+
+    high_str = ''
+    for col, atoms in linker_atoms.items():
+        at_list = ' '.join([str(a) for a in atoms])
+        high_str += f'COLOR {LINKER_COLORS[col]}\nATOMS {at_list}\nBONDS\n'
+
+    if high_str:
+        mol.SetProp('Renderer_Highlight', high_str)
+
+
 def replace_linkers(query_smiles: str, db_file: str,
                     max_heavies: int, max_bonds: int,
                     plus_length: int, minus_length: int,
@@ -243,7 +309,9 @@ def replace_linkers(query_smiles: str, db_file: str,
         if mol is None:
             print(f'Warning: SMILES {query_smiles} gave invalid product {new_smi}.')
             continue
-        zip_mol = rdmolops.molzip(mol)
+        flagged_mol = flag_linkers(mol)
+        zip_mol = rdmolops.molzip(flagged_mol)
+        add_linker_color_props(zip_mol)
         new_mols.append(zip_mol)
 
     return new_mols
