@@ -14,7 +14,7 @@ from random import shuffle
 from typing import Optional, Union
 
 from rdkit import rdBase, Chem
-from rdkit.Chem import rdmolops
+from rdkit.Chem import rdmolops, rdDepictor
 
 import df.find_linkers as fl
 from df.int_range import IntRange
@@ -409,6 +409,7 @@ def replace_linkers(query_mol: Chem.Mol, db_file: str,
     for new_mol in new_mols:
         zip_mol = rdmolops.molzip(new_mol)
         add_linker_color_props(zip_mol)
+        rdDepictor.Compute2DCoords(zip_mol)
         zipped_mols.append(zip_mol)
 
     return zipped_mols, query_cp
