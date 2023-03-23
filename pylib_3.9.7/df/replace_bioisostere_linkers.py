@@ -19,7 +19,7 @@ from rdkit.Chem import rdmolops
 import df.find_linkers as fl
 from df.int_range import IntRange
 
-LINKER_COLORS = ['#f0f060', '#14aadb', '#3beb24', '#000080']
+LINKER_COLORS = ['#14aadb', '#3beb24', '#000080', '#f0f060']
 
 
 def parse_args(cli_args: list[str]):
