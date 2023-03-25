@@ -411,7 +411,14 @@ def replace_linkers(query_mol: Chem.Mol, db_file: str,
         shuffle(new_mols)
         new_mols = new_mols[:max_mols_per_input]
 
-    colour_input_mol(query_cp, linker_atoms)
+    # Colouring the linkers really slows things down, and there's a
+    # a problem with the parallel version - properties aren't pickled
+    # by default so when doing a parallel run the colours are lost in
+    # any case.  This can be fixed by doing
+    # Chem.SetDefaultPickleProperties(Chem.PropertyPickleOptions.AllProps)
+    # in both the main and sub processes but that's causing a mysterious
+    # input error for me at the moment.
+    # colour_input_mol(query_cp, linker_atoms)
 
     zipped_mols = []
     try:
@@ -420,7 +427,8 @@ def replace_linkers(query_mol: Chem.Mol, db_file: str,
         query_name = 'Str'
     for i, new_mol in enumerate(new_mols, 1):
         zip_mol = rdmolops.molzip(new_mol)
-        add_linker_color_props(zip_mol)
+        # see above.
+        # add_linker_color_props(zip_mol)
         rdDepictor.Compute2DCoords(zip_mol)
         zip_mol.SetProp('_Name', f'{query_name}_{i}')
         zipped_mols.append(zip_mol)
@@ -669,6 +677,11 @@ def check_smiles(smiles: str) -> bool:
 
 def main(cli_args):
     print(f'Using RDKit version {rdBase.rdkitVersion}.')
+    # so that properties, such as the _Name, are pickled when passed
+    # into the multiprocessing bit.  Passing properties back out
+    # requires this to be done in the sub-process as well.
+    Chem.SetDefaultPickleProperties(Chem.PropertyPickleOptions.AllProps)
+
     args = parse_args(cli_args)
     if args is None:
         return False
