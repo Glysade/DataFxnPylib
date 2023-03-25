@@ -336,7 +336,7 @@ def colour_input_mol(mol: Chem.Mol, linker_atoms: list[list[int]]) -> None:
     add_linker_color_props(mol)
 
 
-def replace_linkers(query_mol: Chem.Mol, db_file: str,
+def replace_linkers(query_mol: Chem.Mol, db_file: Union[str, Path],
                     max_heavies: int, max_bonds: int,
                     plus_length: int, minus_length: int,
                     match_donors: bool, match_acceptors: bool,
