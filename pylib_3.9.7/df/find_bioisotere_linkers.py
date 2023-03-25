@@ -448,7 +448,7 @@ def find_bioisosteres_in_series(series: dict[str, Union[str, list[str]]],
     """
     molecules = [(smi, name) for smi, name in zip(series['SMILES'], series['ChEMBLID'])]
     linkers = fl.find_all_linkers(molecules, max_heavies=max_heavies,
-                                  max_length=max_bonds, silent=True)
+                                  max_length=max_bonds)
     linker_smis = list(linkers.keys())
     bioisosteres = []
     for i in range(len(linker_smis) - 1):
@@ -737,7 +737,7 @@ def create_database_tables(conn: sqlite3.Connection) -> None:
     linker_id INTEGER PRIMARY KEY,
     name TEXT NON NULL,
     linker_smiles TEXT NON NULL,
-    num_atoms INTEGER NON NULL,
+    linker_atoms TEXT NON NULL,
     mol_smiles TEXT NON NULL,
     left_smiles TEXT NON NULL,
     right_smiles TEXT NON NULL,
@@ -777,11 +777,12 @@ def add_linker_to_table(curs: sqlite3.Cursor, linker: fl.Linker,
     Add the linker to the linkers table, returning its primary key.
     """
     sql = """INSERT INTO linkers
-    (name, linker_smiles, num_atoms, mol_smiles, left_smiles, right_smiles,
+    (name, linker_smiles, linker_atoms, mol_smiles, left_smiles, right_smiles,
      path_length, num_donors, num_acceptors, bioisostere_id)
     VALUES (?,?,?,?,?,?,?,?,?,?)
     """
-    curs.execute(sql, (linker.name, linker.linker_smiles, linker.num_atoms,
+    linker_atoms = ' '.join([str(la) for la in linker.linker_atoms])
+    curs.execute(sql, (linker.name, linker.linker_smiles, linker_atoms,
                        linker.mol_smiles, linker.left_smiles,
                        linker.right_smiles, linker.path_length,
                        linker.num_donors, linker.num_acceptors,
