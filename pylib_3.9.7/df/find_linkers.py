@@ -581,7 +581,6 @@ def find_linkers(mol_rec: tuple[Chem.Mol, str], max_heavies: int = 8,
         num_donors, num_acceptors = count_donors_and_acceptors(linker)
         if ok:
             # print(f'Linker {Chem.MolToSmiles(linker)} ok.')
-            mol_smiles = Chem.MolToSmiles(mol)
             lnk = Linker(name=mol_rec[1],
                          linker=linker,
                          mol=mol,
@@ -632,14 +631,14 @@ def get_mol_name(mol: Chem.Mol, mol_num: int, stem: str) -> str:
 
 
 def serial_find_all_linkers(input_mols: list[tuple[str, str]], max_heavies: int = 8,
-                            max_length: int = 5, silent: bool = False) -> Optional[dict[list[Linker]]]:
+                            max_length: int = 5) -> Optional[dict[list[Linker]]]:
     """
     Do the linker search in serial
     Args:
         input_mols: list of tuples, SMILES string and molecule name.
         max_heavies:
         max_length:
-        silent: if True, doesn't use the progress bar
+
 
     Returns:
 
@@ -657,8 +656,7 @@ def serial_find_all_linkers(input_mols: list[tuple[str, str]], max_heavies: int 
 
 
 def parallel_find_all_linkers(input_mols: list[tuple[str, str]], num_procs: int,
-                              max_heavies: int = 8, max_length: int = 5,
-                              silent: bool = False) -> Optional[dict[str, list[Linker]]]:
+                              max_heavies: int = 8, max_length: int = 5) -> Optional[dict[str, list[Linker]]]:
     """
     Do the linker search in parallel using num_procs processors
     Args:
@@ -666,7 +664,6 @@ def parallel_find_all_linkers(input_mols: list[tuple[str, str]], num_procs: int,
         max_heavies:
         max_length:
         num_procs:
-        silent: if True, doesn't use the progress bar
 
     Returns:
 
@@ -691,25 +688,11 @@ def parallel_find_all_linkers(input_mols: list[tuple[str, str]], num_procs: int,
                     all_linkers[linker.linker_smiles].append(linker)
         next_start += chunk_size
 
-    # if len(input_mols) > 20:
-    #     chunk_size = 1
-    # else:
-    #     chunk_size = 20
-    # with cf.ProcessPoolExecutor(max_workers=cpu_count() - 1) as pool:
-    #     for mol_name, linkers in cf.map(find_linkers, input_mols,
-    #                                          repeat(max_heavies),
-    #                                          repeat(max_length),
-    #                                          max_workers=num_procs,
-    #                                          chunksize=chunk_size,
-    #                                          disable=silent):
-    #         for linker in linkers:
-    #             all_linkers[linker.linker_smiles].append(linker)
     return all_linkers
 
 
 def find_all_linkers(input_mols: list[tuple[str, str]], max_heavies: int = 8,
-                     max_length: int = 5, num_procs=1,
-                     silent: bool = False) -> Optional[dict[str, list[Linker]]]:
+                     max_length: int = 5, num_procs=1) -> Optional[dict[str, list[Linker]]]:
     """
     Analyse the structures in the file and return linkers found.
     Linkers will have maximum of max_heavies non-H atoms, and the
@@ -724,22 +707,18 @@ def find_all_linkers(input_mols: list[tuple[str, str]], max_heavies: int = 8,
         max_length: maximum number of bonds in shortest path
                     between R group atoms.
         num_procs: number of processors for parallel runs
-        silent: suppresses progress reports.
 
     Returns:
         List of Mols that are the linkers or None if there was a
         problem.
     """
 
-    if not silent:
-        print(f'Processing {len(input_mols)} molecules.')
     if num_procs == 1:
         all_linkers = serial_find_all_linkers(input_mols, max_heavies,
-                                              max_length, silent)
+                                              max_length)
     else:
         all_linkers = parallel_find_all_linkers(input_mols, num_procs,
-                                                max_heavies, max_length,
-                                                silent)
+                                                max_heavies, max_length)
 
     return all_linkers
 
@@ -869,7 +848,7 @@ def finish_html_file(htmlf: IO) -> None:
     htmlf.close()
 
 
-def write_html_linkers(linkers: dict[str, list[str]],
+def write_html_linkers(linkers: dict[str, list[Linker]],
                        html_file: Union[str, Path],
                        image_dir: Path) -> bool:
     """
@@ -967,7 +946,7 @@ def create_linkers_table(conn: sqlite3.Connection,
 
 
 def create_linker_molecules_table(conn: sqlite3.Connection,
-                                  linkers: dict[str, list[str]]) -> None:
+                                  linkers: dict[str, list[Linker]]) -> None:
     """
     Make and populate the table giving the molecule details for each
     molecule that each linker was found in.  The SMILES is a foreign
@@ -979,7 +958,6 @@ def create_linker_molecules_table(conn: sqlite3.Connection,
     Returns:
 
     """
-    print('Creating linker_molecules table')
     curs = conn.cursor()
     curs.execute('CREATE TABLE linker_molecules '
                  '(mol_name TEXT,'
@@ -1001,7 +979,7 @@ def create_linker_molecules_table(conn: sqlite3.Connection,
         conn.commit()
 
 
-def write_sqlite_linkers(linkers: dict[str, list[str]],
+def write_sqlite_linkers(linkers: dict[str, list[Linker]],
                          db_file: Union[str, Path]) -> bool:
     """
     Write linkers to SQLite file.  If file exists, it is overwritten.
@@ -1062,7 +1040,7 @@ def write_json_linkers(linkers: dict[str, list[Linker]],
     return True
 
 
-def write_sdf_linkers(linkers: dict[str, list[str]],
+def write_sdf_linkers(linkers: dict[str, list[Linker]],
                       sdf_file: Union[str, Path]) -> bool:
     """
     Write linkers to HTML file containing images.
