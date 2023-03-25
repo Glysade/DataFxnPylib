@@ -64,7 +64,14 @@ class LinkerReplacements(DataFunction):
         """
         all_new_mols = []
         parent_mols = []
-        with cf.ProcessPoolExecutor(max_workers=cpu_count() - 1) as pool:
+        # When the dataset is big enough for parallelisation to make a
+        # difference, the risk of a combinatorial explosion and hence
+        # excessive memory use is very large, so don't go wild on the
+        # number of CPUs.
+        num_cpus = cpu_count() // 2
+        if not num_cpus:
+            num_cpus = 1
+        with cf.ProcessPoolExecutor(max_workers=num_cpus) as pool:
             futures = []
             for mol in self._parent_mols:
                 if mol is None or not mol:
