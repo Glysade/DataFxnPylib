@@ -4,8 +4,8 @@ from pathlib import Path
 
 from df.chem_helper import column_to_molecules, molecules_to_column
 from df.data_transfer import (DataFunction, DataFunctionRequest,
-                              DataFunctionResponse, DataType, TableData,
-                              boolean_input_field,
+                              DataFunctionResponse, ColumnData, DataType,
+                              TableData, boolean_input_field,
                               integer_input_field, string_input_field)
 from rdkit import Chem
 
@@ -18,13 +18,17 @@ MAX_HEAVIES = 10
 MAX_BONDS = 5
 
 
-def build_output_table(new_mols: list[Chem.Mol], parent_mols: list[Chem.Mol]) -> TableData:
+def build_output_table(new_mols: list[Chem.Mol], parent_mols: list[Chem.Mol],
+                       parent_ids: list[str],
+                       parent_id_type: DataType) -> TableData:
     parent_col = molecules_to_column(parent_mols, "Parent Mols",
                                      DataType.BINARY)
     new_col = molecules_to_column(new_mols, "New Linker Mols",
                                   DataType.BINARY)
+    id_col = ColumnData(name='Parent ID', dataType=parent_id_type,
+                        values=parent_ids)
     table_data = TableData(tableName='New Linker Mols',
-                           columns=[parent_col, new_col])
+                           columns=[parent_col, id_col, new_col])
     return table_data
 
 
@@ -36,6 +40,8 @@ class LinkerReplacements(DataFunction):
         self._match_hbonds = False
         self._structure_column_name = None
         self._parent_mols = None
+        self._parent_ids = None
+        self._ids_type = None
         self._max_mols_per_input = 1000
         super().__init__()
 
@@ -50,9 +56,10 @@ class LinkerReplacements(DataFunction):
         self._match_hbonds = boolean_input_field(request, 'matchHbonds')
         self._max_mols_per_input = integer_input_field(request,
                                                        'maxMolsPerInput')
-        # column_id = string_input_field(request, 'idColumn')
-        # id_column = request.inputColumns[column_id]
-        # print(id_column.values)
+        column_id = string_input_field(request, 'idColumn')
+        id_column = request.inputColumns[column_id]
+        self._parent_ids = id_column.values
+        self._ids_type = id_column.dataType
 
     def do_replacements(self) -> tuple[list[Chem.Mol], list[Chem.Mol]]:
         """
@@ -64,6 +71,7 @@ class LinkerReplacements(DataFunction):
         """
         all_new_mols = []
         parent_mols = []
+        parent_ids = []
         # When the dataset is big enough for parallelisation to make a
         # difference, the risk of a combinatorial explosion and hence
         # excessive memory use is very large, so don't go wild on the
@@ -72,8 +80,8 @@ class LinkerReplacements(DataFunction):
         if not num_cpus:
             num_cpus = 1
         with cf.ProcessPoolExecutor(max_workers=num_cpus) as pool:
-            futures = []
-            for mol in self._parent_mols:
+            futures_to_mol_id = {}
+            for mol, mol_id in zip(self._parent_mols, self._parent_ids):
                 if mol is None or not mol:
                     continue
                 fut = pool.submit(replace_linkers, mol, LINKER_DB,
@@ -84,18 +92,30 @@ class LinkerReplacements(DataFunction):
                                   match_donors=self._match_hbonds,
                                   match_acceptors=self._match_hbonds,
                                   max_mols_per_input=self._max_mols_per_input)
-                futures.append(fut)
-            for fut in cf.as_completed(futures):
+                futures_to_mol_id[fut] = mol_id
+            for fut in cf.as_completed(futures_to_mol_id):
                 new_mols, query_cp = fut.result()
                 all_new_mols.extend(new_mols)
                 parent_mols.extend([query_cp] * len(new_mols))
+                query_id = futures_to_mol_id[fut]
+                parent_ids.extend([query_id] * len(new_mols))
 
-        return all_new_mols, parent_mols
+            # put the output in input order
+            id_indices = [(i, pid) for i, pid in enumerate(parent_ids)]
+            id_indices.sort(key=lambda k: k[1])
+            new_parent_mols = []
+            new_parent_ids = []
+            for idi in id_indices:
+                new_parent_mols.append(parent_mols[idi[0]])
+                new_parent_ids.append(parent_ids[idi[0]])
+
+        return all_new_mols, new_parent_mols, new_parent_ids
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
 
         self.extract_input_data(request)
-        new_mols, parent_mols = self.do_replacements()
-        output_table = build_output_table(new_mols, parent_mols)
+        new_mols, parent_mols, parent_ids = self.do_replacements()
+        output_table = build_output_table(new_mols, parent_mols, parent_ids,
+                                          self._ids_type)
 
         return DataFunctionResponse(outputTables=[output_table])
