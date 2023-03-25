@@ -10,9 +10,8 @@ import sqlite3
 import sys
 
 from collections import defaultdict
-from itertools import repeat
+from os import cpu_count
 from pathlib import Path
-from psutil import cpu_count
 from typing import IO, Optional, Union
 
 from rdkit import rdBase, Chem
@@ -520,6 +519,7 @@ def add_linker_to_list(linker: Linker, all_linkers: list[Linker]) -> None:
             return
 
     all_linkers.append(linker)
+
 
 def count_donors_and_acceptors(mol: Chem.Mol) -> tuple[int, int]:
     """

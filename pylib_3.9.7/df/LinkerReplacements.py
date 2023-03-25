@@ -1,3 +1,5 @@
+import concurrent.futures as cf
+from os import cpu_count
 from pathlib import Path
 
 from df.chem_helper import column_to_molecules, molecules_to_column
@@ -12,18 +14,19 @@ from df.replace_bioisostere_linkers import replace_linkers
 LINKER_DB = Path(__file__).parent.parent.parent / 'Data' / 'chembl_32_bioisostere_linkers.db'
 # These 2 values should match those used to make LINKER_DB.  10 and 5
 # are the numbers suggested by Ertl et al.
-MAX_HEAVIES=10
-MAX_BONDS=5
+MAX_HEAVIES = 10
+MAX_BONDS = 5
 
 
 def build_output_table(new_mols: list[Chem.Mol], parent_mols: list[Chem.Mol]) -> TableData:
     parent_col = molecules_to_column(parent_mols, "Parent Mols",
-                                      DataType.BINARY)
+                                     DataType.BINARY)
     new_col = molecules_to_column(new_mols, "New Linker Mols",
                                   DataType.BINARY)
     table_data = TableData(tableName='New Linker Mols',
                            columns=[parent_col, new_col])
     return table_data
+
 
 class LinkerReplacements(DataFunction):
 
@@ -61,21 +64,24 @@ class LinkerReplacements(DataFunction):
         """
         all_new_mols = []
         parent_mols = []
-        for mol in self._parent_mols:
-            if mol is None or not mol:
-                continue
-            print(f'doing {Chem.MolToSmiles(mol)}')
-            new_mols, query_cp = \
-                replace_linkers(mol, LINKER_DB, max_heavies=MAX_HEAVIES,
-                                max_bonds=MAX_BONDS,
-                                plus_length=self._plus_delta_bonds,
-                                minus_length=self._minus_delta_bonds,
-                                match_donors=self._match_hbonds,
-                                match_acceptors=self._match_hbonds,
-                                max_mols_per_input=self._max_mols_per_input)
-            print(f'number of replacements : {len(new_mols)}')
-            all_new_mols.extend(new_mols)
-            parent_mols.extend([query_cp] * len(new_mols))
+        with cf.ProcessPoolExecutor(max_workers=cpu_count() - 1) as pool:
+            futures = []
+            for mol in self._parent_mols:
+                if mol is None or not mol:
+                    continue
+                fut = pool.submit(replace_linkers, mol, LINKER_DB,
+                                  max_heavies=MAX_HEAVIES,
+                                  max_bonds=MAX_BONDS,
+                                  plus_length=self._plus_delta_bonds,
+                                  minus_length=self._minus_delta_bonds,
+                                  match_donors=self._match_hbonds,
+                                  match_acceptors=self._match_hbonds,
+                                  max_mols_per_input=self._max_mols_per_input)
+                futures.append(fut)
+            for fut in cf.as_completed(futures):
+                new_mols, query_cp = fut.result()
+                all_new_mols.extend(new_mols)
+                parent_mols.extend([query_cp] * len(new_mols))
 
         return all_new_mols, parent_mols
 

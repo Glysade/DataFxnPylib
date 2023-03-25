@@ -14,9 +14,8 @@ import sys
 
 import df.find_linkers as fl
 
-from os import close
+from os import close, cpu_count
 from pathlib import Path
-from psutil import cpu_count
 from tempfile import mkstemp
 from typing import Any, IO, Optional, Union
 
@@ -535,10 +534,10 @@ def extract_bioisosteres(series: list[dict[str, Union[str, list[str]]]],
         bioisosteres = None
         with cf.ProcessPoolExecutor(max_workers=cpu_count() - 1) as pool:
             for next_bios in pool.map(find_bioisosteres_in_series,
-                                         series,
-                                         itertools.repeat(max_heavies),
-                                         itertools.repeat(max_bonds),
-                                         max_workers=num_procs, chunksize=1):
+                                      series,
+                                      itertools.repeat(max_heavies),
+                                      itertools.repeat(max_bonds),
+                                      max_workers=num_procs, chunksize=1):
                 bioisosteres = merge_bioisosteres(next_bios, bioisosteres)
 
     trimmed_bios = []
