@@ -32,15 +32,17 @@ def build_output_table(new_mols: list[Chem.Mol], parent_mols: list[Chem.Mol],
     for als in all_linker_smis:
         if len(als) > num_linker_cols:
             num_linker_cols = len(als)
+    print(f'numboer of columns : {num_linker_cols}')
     columns = [parent_col, id_col, new_col]
     for i in range(num_linker_cols):
         linker_smis = []
         for als in all_linker_smis:
+            print(f'als : {als}')
             if i < len(als):
                 linker_smis.append(als[i])
             else:
                 linker_smis.append('')
-        columns.append(ColumnData(name='Linker {i+1}',
+        columns.append(ColumnData(name=f'Linker {i + 1}',
                                   dataType=DataType.STRING,
                                   values=linker_smis))
     table_data = TableData(tableName='New Linker Mols',
@@ -113,24 +115,30 @@ class LinkerReplacements(DataFunction):
             for fut in cf.as_completed(futures_to_mol_id):
                 new_mols, query_cp, linker_smis = fut.result()
                 if new_mols:
-                    all_new_mols.extend(new_mols)
-                    parent_mols.extend([query_cp] * len(new_mols))
-                    query_id = futures_to_mol_id[fut]
-                    parent_ids.extend([query_id] * len(new_mols))
-                    all_linker_smis.extend(linker_smis)
+                    all_new_mols.append(new_mols)
+                    parent_mols.append(query_cp)
+                    all_linker_smis.append(linker_smis)
+                    parent_ids.append(futures_to_mol_id[fut])
 
+            print(f'lengths : {len(all_new_mols)} : {len(parent_mols)} : {len(parent_ids)}'
+                  f' : {len(all_linker_smis)}')
+            print(parent_ids)
             # put the output in input order
-            id_indices = [(i, pid) for i, pid in enumerate(parent_ids)]
-            id_indices.sort(key=lambda k: k[1])
+            id_indices = {pid: i for i, pid in enumerate(parent_ids)}
+            print(id_indices)
+            new_new_mols = []
             new_parent_mols = []
             new_parent_ids = []
             new_linker_smis = []
-            for idi in id_indices:
-                new_parent_mols.append(parent_mols[idi[0]])
-                new_parent_ids.append(parent_ids[idi[0]])
-                new_linker_smis.append(all_linker_smis[idi[0]])
+            for pid in self._parent_ids:
+                id = id_indices[pid]
+                print(f'Doing {pid} : {id}')
+                new_new_mols.extend(all_new_mols[id])
+                new_parent_mols.extend([parent_mols[id]] * len(all_new_mols[id]))
+                new_parent_ids.extend([pid] * len(all_new_mols[id]))
+                new_linker_smis.extend(all_linker_smis[id])
 
-        return all_new_mols, new_parent_mols, new_parent_ids, new_linker_smis
+        return new_new_mols, new_parent_mols, new_parent_ids, new_linker_smis
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
 
