@@ -355,6 +355,7 @@ def random_selection_of_mols(mols: list[Chem.Mol], linker_smis: list[str],
     Take a matching random sample of the input lists up to num_to_have
     in size.
     """
+    print(f'randomly seletecing {num_to_have} from {len(mols)} and {len(linker_smis)}')
     all_indices = [i for i in range(len(mols))]
     shuffle(all_indices)
     new_mols = []
@@ -362,18 +363,19 @@ def random_selection_of_mols(mols: list[Chem.Mol], linker_smis: list[str],
     for al in all_indices[:num_to_have + 1]:
         new_mols.append(mols[al])
         new_linker_smis.append(linker_smis[al])
+        print(Chem.MolToSmiles(mols[al]), linker_smis[al])
 
     return new_mols, new_linker_smis
 
 
 def zip_up_mols(mols: list[Chem.Mol], linker_smis: list[str],
                 query_smi: str, num_to_have: int,
-                name_stem: str) -> tuple[list[Chem.Mol], list[str]]:
+                name_stem: str) -> tuple[list[Chem.Mol], list[list[str]]]:
     zipped_mols = []
     final_linker_smis = []
     zipped_smis = {}
     for new_mol, new_linker_smi in zip(mols, linker_smis):
-        # print(new_linker_smis[i])
+        print(f'zipping {Chem.MolToSmiles(new_mol)} : {new_linker_smi}')
         zip_mol = rdmolops.molzip(new_mol)
         zip_smi = Chem.MolToSmiles(zip_mol)
         # Don't return the input molecule.
@@ -391,6 +393,7 @@ def zip_up_mols(mols: list[Chem.Mol], linker_smis: list[str],
         zip_mol.SetProp('_Name', f'{name_stem}_{len(zipped_mols)}')
         zipped_mols.append(zip_mol)
         final_linker_smis.append(fettled_linker_smis(new_linker_smi))
+        print(f'produced : {Chem.MolToSmiles(zip_mol)} : {final_linker_smis[-1]}')
         if len(zipped_mols) == num_to_have:
             break
 
