@@ -532,12 +532,12 @@ def extract_bioisosteres(series: list[dict[str, Union[str, list[str]]]],
             bioisosteres = merge_bioisosteres(next_bios, bioisosteres)
     else:
         bioisosteres = None
-        with cf.ProcessPoolExecutor(max_workers=cpu_count() - 1) as pool:
+        with cf.ProcessPoolExecutor(max_workers=num_procs) as pool:
             for next_bios in pool.map(find_bioisosteres_in_series,
                                       series,
                                       itertools.repeat(max_heavies),
                                       itertools.repeat(max_bonds),
-                                      max_workers=num_procs, chunksize=1):
+                                      chunksize=1):
                 bioisosteres = merge_bioisosteres(next_bios, bioisosteres)
 
     trimmed_bios = []

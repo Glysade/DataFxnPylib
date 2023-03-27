@@ -150,7 +150,7 @@ def make_new_smiles(mol_smi: str, linker_smi: str, bios: list[str]) -> list[str]
     return new_smis
 
 
-def make_new_mols(mol: Chem.Mol, linker_smi: str, bios: list[str],
+def make_new_mols(mol: Chem.Mol, bios: list[str],
                   linker_num: int) -> list[Chem.Mol]:
     """
     Take the fragmented SMILES string, the SMILES of the current
@@ -161,8 +161,7 @@ def make_new_mols(mol: Chem.Mol, linker_smi: str, bios: list[str],
     the bioisostere list, are flagged with linker_num as the 'Linker'
     property for the atoms.
     Args:
-        mol_smi: fragmented SMILES string
-        linker_smi: SMILES string of current linker of interest
+        mol: fragmented SMILES string
         bios: list of SMILES strings to be attached to left and right
               SMILES
         linker_num: number of linker, used to set properties on linker
@@ -336,17 +335,86 @@ def colour_input_mol(mol: Chem.Mol, linker_atoms: list[list[int]]) -> None:
     add_linker_color_props(mol)
 
 
+def fettled_linker_smis(linker_smi: str) -> list[str]:
+    """
+    Take the .-separated string of linker SMILES and return a list of
+    the SMILES with the dummy atom numbers all changed to 1 and 2 as
+    appropriate
+    """
+    out_smis = []
+    for smi in linker_smi.split('.'):
+        new1, new2 = extract_dummy_atoms_from_smiles(smi)
+        out_smis.append(smi.replace(new1, '[*:1]').replace(new2, '[*:2]'))
+
+    return out_smis
+
+
+def random_selection_of_mols(mols: list[Chem.Mol], linker_smis: list[str],
+                             num_to_have: int) -> tuple[list[Chem.Mol], list[str]]:
+    """
+    Take a matching random sample of the input lists up to num_to_have
+    in size.
+    """
+    all_indices = [i for i in range(len(mols))]
+    shuffle(all_indices)
+    new_mols = []
+    new_linker_smis = []
+    for al in all_indices[:num_to_have + 1]:
+        new_mols.append(mols[al])
+        new_linker_smis.append(linker_smis[al])
+
+    return new_mols, new_linker_smis
+
+
+def zip_up_mols(mols: list[Chem.Mol], linker_smis: list[str],
+                query_smi: str, num_to_have: int,
+                name_stem: str) -> tuple[list[Chem.Mol], list[str]]:
+    zipped_mols = []
+    final_linker_smis = []
+    zipped_smis = {}
+    for new_mol, new_linker_smi in zip(mols, linker_smis):
+        # print(new_linker_smis[i])
+        zip_mol = rdmolops.molzip(new_mol)
+        zip_smi = Chem.MolToSmiles(zip_mol)
+        # Don't return the input molecule.
+        if query_smi == zip_smi:
+            continue
+        # keep track of duplicates
+        if zip_smi in zipped_smis:
+            continue
+        else:
+            zipped_smis[zip_smi] = len(zipped_mols)
+        # Not colouring at the moment, see replace_linkers for
+        # discussion.
+        # add_linker_color_props(zip_mol)
+        rdDepictor.Compute2DCoords(zip_mol)
+        zip_mol.SetProp('_Name', f'{name_stem}_{len(zipped_mols)}')
+        zipped_mols.append(zip_mol)
+        final_linker_smis.append(fettled_linker_smis(new_linker_smi))
+        if len(zipped_mols) == num_to_have:
+            break
+
+    return zipped_mols, final_linker_smis
+
+
 def replace_linkers(query_mol: Chem.Mol, db_file: Union[str, Path],
                     max_heavies: int, max_bonds: int,
                     plus_length: int, minus_length: int,
                     match_donors: bool, match_acceptors: bool,
-                    max_mols_per_input: int) -> tuple[list[Chem.Mol], Chem.Mol]:
+                    max_mols_per_input: int) -> tuple[list[Chem.Mol], Chem.Mol, list[list[str]]]:
     """
     Take the query molecule, find any linkers in the structure and
     return new molecules with the linkers replaced by ones plucked
-    from the bioisostere database.  Also returns a copy of the input
-    molecule annotated and coloured to show the linkers that have
-    been replaced.
+    from the bioisostere database.  Also includes cases where the
+    original linker isn't changed, by not removing the original
+    molecule.  This is so that if there is more than 1 linker to
+    replace, we get the cases where one linker is changed and the
+    rest are held constant, but doesn't include the no-change case.
+    Also returns a copy of the input molecule which could be annotated
+    and coloured to show the linkers that have been replaced, but the
+    latter isn't done at the moment.
+    The final element of the returned tuple is a list of lists of the
+    SMILES strings of the linkers in each new molecule.
     New linkers must have a length (shortest distance in bonds between
     dummies) of l-minus_length to l+plus_length where l is the length
     of each linker in query_mol.  If match_donors is True, then any
@@ -370,7 +438,7 @@ def replace_linkers(query_mol: Chem.Mol, db_file: Union[str, Path],
         new molecules
     """
     if query_mol is None or not query_mol:
-        return [], None
+        return [], None, None
 
     # Start by copying the molecule and labelling each atom with its
     # input index number so we can keep track of the atoms that go into
@@ -385,31 +453,37 @@ def replace_linkers(query_mol: Chem.Mol, db_file: Union[str, Path],
     # print(f'query-mol : {Chem.MolToSmiles(query_mol)}')
     split_mol = split_input_smiles(query_cp, linker_smis, linker_atoms,
                                    max_heavies, max_bonds, linker_num)
-    # print(f'split_mol : {Chem.MolToSmiles(split_mol)}')
-    # print(f'linker_smis : {linker_smis}')
-    # for l in linker_smis:
-    #     print(f'linker_smi : {l}')
     if not linker_smis:
-        return [], None
+        return [], None, None
 
     new_mols = [split_mol]
+    new_linker_smis = ['']
+
     for i, lsmi in enumerate(linker_smis, 1):
         # print(f'{i} : {lsmi} : {linker_atoms[i - 1]}')
         bios = fetch_bioisosteres(lsmi, db_file, plus_length, minus_length,
                                   match_donors, match_acceptors)
-        # If there aren't any bioisosteres for this linker, leave it
-        # as is.
+        # include the original linker if needed
+        if lsmi not in bios:
+            bios = [lsmi] + bios
         # print(f'linker {lsmi} has {len(bios)} replacements : {bios}')
-        if not bios:
-            bios = [lsmi]
         next_new_mols = []
-        for nm in new_mols:
-            next_new_mols.extend(make_new_mols(nm, lsmi, bios, i))
+        next_new_linker_smis = []
+        for nm, ns in zip(new_mols, new_linker_smis):
+            next_new_mols.extend(make_new_mols(nm, bios, i))
+            if ns:
+                next_new_linker_smis.extend([ns + '.' + b for b in bios])
+            else:
+                next_new_linker_smis.extend(bios)
         new_mols = next_new_mols
+        new_linker_smis = next_new_linker_smis
 
+    # Allow for query_mol to appear in the output, in which case it
+    # is removed below.
     if len(new_mols) > max_mols_per_input:
-        shuffle(new_mols)
-        new_mols = new_mols[:max_mols_per_input]
+        new_mols, new_linker_smis = \
+            random_selection_of_mols(new_mols, new_linker_smis,
+                                     max_mols_per_input + 1)
 
     # Colouring the linkers really slows things down, and there's a
     # a problem with the parallel version - properties aren't pickled
@@ -420,20 +494,16 @@ def replace_linkers(query_mol: Chem.Mol, db_file: Union[str, Path],
     # input error for me at the moment.
     # colour_input_mol(query_cp, linker_atoms)
 
-    zipped_mols = []
     try:
         query_name = query_cp.GetProp('_Name')
     except KeyError:
         query_name = 'Str'
-    for i, new_mol in enumerate(new_mols, 1):
-        zip_mol = rdmolops.molzip(new_mol)
-        # see above.
-        # add_linker_color_props(zip_mol)
-        rdDepictor.Compute2DCoords(zip_mol)
-        zip_mol.SetProp('_Name', f'{query_name}_{i}')
-        zipped_mols.append(zip_mol)
+    query_smi = Chem.MolToSmiles(query_mol)
 
-    return zipped_mols, query_cp
+    zipped_mols, final_linker_smis = zip_up_mols(new_mols, new_linker_smis,
+                                                 query_smi, max_mols_per_input,
+                                                 query_name)
+    return zipped_mols, query_cp, final_linker_smis
 
 
 def bulk_replace_linkers(mol_file: str, db_file: str,
@@ -441,7 +511,8 @@ def bulk_replace_linkers(mol_file: str, db_file: str,
                          plus_length: int, minus_length: int,
                          match_donors: bool, match_acceptors: bool,
                          max_mols_per_input: int,
-                         num_procs: int) -> Union[None, list[list[Chem.Mol]], list[Chem.Mol]]:
+                         num_procs: int) -> tuple[
+    Union[list[list[Chem.Mol]], None], Union[list[Chem.Mol], None], Union[list[list[list[str]]], None]]:
     """
     Take the structures in the mol file and process them with
     replace_linkers.  Returns None if file can't be read.
@@ -469,10 +540,11 @@ def bulk_replace_linkers(mol_file: str, db_file: str,
     """
     suppl = fl.create_mol_supplier(mol_file)
     if suppl is None:
-        return None, None
+        return None, None, None
 
     all_new_mols = []
     all_query_cps = []
+    all_linker_smis = []
     with cf.ProcessPoolExecutor(max_workers=num_procs) as pool:
         futures = []
         for i, mol in enumerate(suppl, 1):
@@ -492,11 +564,12 @@ def bulk_replace_linkers(mol_file: str, db_file: str,
             futures.append(fut)
 
         for fut in cf.as_completed(futures):
-            new_mols, query_cp = fut.result()
+            new_mols, query_cp, linker_smis = fut.result()
             all_new_mols.append(new_mols)
             all_query_cps.append(query_cp)
+            all_linker_smis.append(linker_smis)
 
-    return all_new_mols, all_query_cps
+    return all_new_mols, all_query_cps, all_linker_smis
 
 
 def trim_linkers_by_length(conn: sqlite3.Connection, query_linker: str,
@@ -563,13 +636,27 @@ def trim_linkers_by_hbonding(conn: sqlite3.Connection, query_linker: str,
     return new_linkers
 
 
+def extract_dummy_atoms_from_smiles(smiles: str) -> tuple[str, str]:
+    """
+    Extract the [*:X] strings from the linker SMILES.
+    """
+    dummy_regex = re.compile(r'\[\*:(\d+)\]')
+    dummy_matches = sorted([int(dm) for dm in dummy_regex.findall(smiles)])
+    dummy1 = f'[*:{dummy_matches[0]}]'
+    dummy2 = f'[*:{dummy_matches[1]}]'
+    return dummy1, dummy2
+
+
 def fetch_bioisosteres(linker_smi: str, db_file: str,
                        plus_length: int, minus_length: int,
                        match_donors: bool, match_acceptors: bool) -> Optional[list[str]]:
     """
     Pull all bioisosteres from db_file that include the linker_smi
     on one side or the other.  Returns SMILES strings of the
-    swaps.
+    swaps.  Assumes, but doesn't check, that linker_smi doesn't contain
+    [*:1] or [*:2].  The results will most likely be wrong if it does.
+    In normal use by this script, the lowest the atom numbers should be
+    is 3 and 4.
     Bioisosteres must have a length (shortest distance in bonds between
     dummies) of l-minus_length to l+plus_length where l is the length
     of each linker in query_smiles.  If match_donors is True, then any
@@ -595,11 +682,7 @@ def fetch_bioisosteres(linker_smi: str, db_file: str,
     # print(f'fetch_bioisosteres : {linker_smi}')
     # the linker_smi won't necessarily have the dummies with map
     # numbers 1 and 2, but they need to be so for looking up.
-    dummy_regex = re.compile(r'\[\*:(\d+)\]')
-    dummy_matches = sorted([int(dm) for dm in dummy_regex.findall(linker_smi)])
-    # print(f'searching {linker_smi} : dummy matches : {dummy_matches}')
-    new1 = f'[*:{dummy_matches[0]}]'
-    new2 = f'[*:{dummy_matches[1]}]'
+    new1, new2 = extract_dummy_atoms_from_smiles(linker_smi)
     # Left and right are completely arbitrary for this - a minor change
     # to a molecule can change the canonical order of the atoms such
     # that the linker comes out with the reversed atom maps. Thus,
@@ -632,9 +715,20 @@ def fetch_bioisosteres(linker_smi: str, db_file: str,
         bios = trim_linkers_by_hbonding(conn, mended_smi1, bios, match_donors,
                                         match_acceptors)
 
-    bios = [b.replace('[*:1]', new1).replace('[*:2]', new2) for b in bios]
-    # print(bios)
-    return bios
+    # Now replace the :1 and :2 dummies with the ones we require for this
+    # molecule. In the case of an asymmetric linker, we have no information
+    # about whether this should be one way or the other, so use them both.
+    final_bios = []
+    for b in bios:
+        final_bios.append(b.replace('[*:1]', new1).replace('[*:2]', new2))
+        final_bios.append(b.replace('[*:2]', new1).replace('[*:1]', new2))
+
+    # symmetrical ones will have given the same thing twice, so remove them.
+    final_bios = [Chem.MolToSmiles(Chem.MolFromSmiles(b)) for b in final_bios]
+    # It's not essential that final_bios is sorted, but it makes testing
+    # easier if the order is always consistent.
+    final_bios = sorted(list(set(final_bios)))
+    return final_bios
 
 
 def write_mols(mol_lists: list[list[Chem.Mol]], out_file: str) -> bool:
@@ -689,20 +783,20 @@ def main(cli_args):
     if args.query_smiles is not None:
         if not check_smiles(args.query_smiles):
             return False
-        ret_mols, query_cp = replace_linkers(args.query_smiles, args.db_file,
-                                             args.max_heavies, args.max_bonds,
-                                             args.plus_length, args.minus_length,
-                                             args.match_donors, args.match_acceptors,
-                                             args.max_mols_per_input)
+        ret_mols, query_cp, _ = replace_linkers(args.query_smiles, args.db_file,
+                                                args.max_heavies, args.max_bonds,
+                                                args.plus_length, args.minus_length,
+                                                args.match_donors, args.match_acceptors,
+                                                args.max_mols_per_input)
         new_mols = [ret_mols]
     else:
-        new_mols, query_cps = bulk_replace_linkers(args.input_file, args.db_file,
-                                                   args.max_heavies, args.max_bonds,
-                                                   args.plus_length, args.minus_length,
-                                                   args.match_donors,
-                                                   args.match_acceptors,
-                                                   args.max_mols_per_input,
-                                                   args.num_procs)
+        new_mols, query_cps, _ = bulk_replace_linkers(args.input_file, args.db_file,
+                                                      args.max_heavies, args.max_bonds,
+                                                      args.plus_length, args.minus_length,
+                                                      args.match_donors,
+                                                      args.match_acceptors,
+                                                      args.max_mols_per_input,
+                                                      args.num_procs)
     if new_mols is None or not new_mols:
         return False
 

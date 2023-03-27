@@ -20,15 +20,31 @@ MAX_BONDS = 5
 
 def build_output_table(new_mols: list[Chem.Mol], parent_mols: list[Chem.Mol],
                        parent_ids: list[str],
-                       parent_id_type: DataType) -> TableData:
+                       parent_id_type: DataType,
+                       all_linker_smis: list[list[str]]) -> TableData:
     parent_col = molecules_to_column(parent_mols, "Parent Mols",
                                      DataType.BINARY)
     new_col = molecules_to_column(new_mols, "New Linker Mols",
                                   DataType.BINARY)
     id_col = ColumnData(name='Parent ID', dataType=parent_id_type,
                         values=parent_ids)
+    num_linker_cols = 0
+    for als in all_linker_smis:
+        if len(als) > num_linker_cols:
+            num_linker_cols = len(als)
+    columns = [parent_col, id_col, new_col]
+    for i in range(num_linker_cols):
+        linker_smis = []
+        for als in all_linker_smis:
+            if i < len(als):
+                linker_smis.append(als[i])
+            else:
+                linker_smis.append('')
+        columns.append(ColumnData(name='Linker {i+1}',
+                                  dataType=DataType.STRING,
+                                  values=linker_smis))
     table_data = TableData(tableName='New Linker Mols',
-                           columns=[parent_col, id_col, new_col])
+                           columns=columns)
     return table_data
 
 
@@ -61,7 +77,7 @@ class LinkerReplacements(DataFunction):
         self._parent_ids = id_column.values
         self._ids_type = id_column.dataType
 
-    def do_replacements(self) -> tuple[list[Chem.Mol], list[Chem.Mol]]:
+    def do_replacements(self) -> tuple[list[Chem.Mol], list[Chem.Mol], list[str], list[list[str]]]:
         """
         Replace all the linkers in the input set, returning a list of
         new molecules and a corresponding list of the input molecules.
@@ -72,6 +88,7 @@ class LinkerReplacements(DataFunction):
         all_new_mols = []
         parent_mols = []
         parent_ids = []
+        all_linker_smis = []
         # When the dataset is big enough for parallelisation to make a
         # difference, the risk of a combinatorial explosion and hence
         # excessive memory use is very large, so don't go wild on the
@@ -94,28 +111,32 @@ class LinkerReplacements(DataFunction):
                                   max_mols_per_input=self._max_mols_per_input)
                 futures_to_mol_id[fut] = mol_id
             for fut in cf.as_completed(futures_to_mol_id):
-                new_mols, query_cp = fut.result()
-                all_new_mols.extend(new_mols)
-                parent_mols.extend([query_cp] * len(new_mols))
-                query_id = futures_to_mol_id[fut]
-                parent_ids.extend([query_id] * len(new_mols))
+                new_mols, query_cp, linker_smis = fut.result()
+                if new_mols:
+                    all_new_mols.extend(new_mols)
+                    parent_mols.extend([query_cp] * len(new_mols))
+                    query_id = futures_to_mol_id[fut]
+                    parent_ids.extend([query_id] * len(new_mols))
+                    all_linker_smis.extend(linker_smis)
 
             # put the output in input order
             id_indices = [(i, pid) for i, pid in enumerate(parent_ids)]
             id_indices.sort(key=lambda k: k[1])
             new_parent_mols = []
             new_parent_ids = []
+            new_linker_smis = []
             for idi in id_indices:
                 new_parent_mols.append(parent_mols[idi[0]])
                 new_parent_ids.append(parent_ids[idi[0]])
+                new_linker_smis.append(all_linker_smis[idi[0]])
 
-        return all_new_mols, new_parent_mols, new_parent_ids
+        return all_new_mols, new_parent_mols, new_parent_ids, new_linker_smis
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
 
         self.extract_input_data(request)
-        new_mols, parent_mols, parent_ids = self.do_replacements()
+        new_mols, parent_mols, parent_ids, new_linker_smis = self.do_replacements()
         output_table = build_output_table(new_mols, parent_mols, parent_ids,
-                                          self._ids_type)
+                                          self._ids_type, new_linker_smis)
 
         return DataFunctionResponse(outputTables=[output_table])
