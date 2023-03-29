@@ -32,12 +32,10 @@ def build_output_table(new_mols: list[Chem.Mol], parent_mols: list[Chem.Mol],
     for als in all_linker_smis:
         if len(als) > num_linker_cols:
             num_linker_cols = len(als)
-    print(f'numboer of columns : {num_linker_cols}')
     columns = [parent_col, id_col, new_col]
     for i in range(num_linker_cols):
         linker_smis = []
         for als in all_linker_smis:
-            print(f'als : {als}')
             if i < len(als):
                 linker_smis.append(als[i])
             else:
@@ -87,10 +85,9 @@ class LinkerReplacements(DataFunction):
         to them, so multiple entries in parent_mols may be pointing to
         the same object.
         """
-        all_new_mols = []
-        parent_mols = []
-        parent_ids = []
-        all_linker_smis = []
+        all_new_mols = {}
+        parent_mols = {}
+        all_linker_smis = {}
         # When the dataset is big enough for parallelisation to make a
         # difference, the risk of a combinatorial explosion and hence
         # excessive memory use is very large, so don't go wild on the
@@ -114,29 +111,27 @@ class LinkerReplacements(DataFunction):
                 futures_to_mol_id[fut] = mol_id
             for fut in cf.as_completed(futures_to_mol_id):
                 new_mols, query_cp, linker_smis = fut.result()
+                mol_id = futures_to_mol_id[fut]
                 if new_mols:
-                    all_new_mols.append(new_mols)
-                    parent_mols.append(query_cp)
-                    all_linker_smis.append(linker_smis)
-                    parent_ids.append(futures_to_mol_id[fut])
+                    all_new_mols[mol_id] = new_mols
+                    parent_mols[mol_id] = query_cp
+                    all_linker_smis[mol_id] = linker_smis
 
-            print(f'lengths : {len(all_new_mols)} : {len(parent_mols)} : {len(parent_ids)}'
-                  f' : {len(all_linker_smis)}')
-            print(parent_ids)
-            # put the output in input order
-            id_indices = {pid: i for i, pid in enumerate(parent_ids)}
-            print(id_indices)
-            new_new_mols = []
-            new_parent_mols = []
-            new_parent_ids = []
-            new_linker_smis = []
-            for pid in self._parent_ids:
-                id = id_indices[pid]
-                print(f'Doing {pid} : {id}')
-                new_new_mols.extend(all_new_mols[id])
-                new_parent_mols.extend([parent_mols[id]] * len(all_new_mols[id]))
-                new_parent_ids.extend([pid] * len(all_new_mols[id]))
-                new_linker_smis.extend(all_linker_smis[id])
+        # put the output in input order
+        new_new_mols = []
+        new_parent_mols = []
+        new_parent_ids = []
+        new_linker_smis = []
+        for pid in self._parent_ids:
+            try:
+                new_new_mols.extend(all_new_mols[pid])
+                new_parent_mols.extend([parent_mols[pid]] * len(all_new_mols[pid]))
+                new_parent_ids.extend([pid] * len(all_new_mols[pid]))
+                new_linker_smis.extend(all_linker_smis[pid])
+            except KeyError:
+                # For some reason, such as there were no linkers in
+                # the molecule, it produced no output.
+                pass
 
         return new_new_mols, new_parent_mols, new_parent_ids, new_linker_smis
 

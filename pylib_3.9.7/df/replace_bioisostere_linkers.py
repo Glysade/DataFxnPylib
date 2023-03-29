@@ -513,8 +513,8 @@ def bulk_replace_linkers(mol_file: str, db_file: str,
                          match_donors: bool, match_acceptors: bool,
                          max_mols_per_input: int,
                          num_procs: int) -> tuple[
-    Union[list[list[Chem.Mol]], None], Union[list[Chem.Mol], None],
-    Union[list[list[list[str]]], None]]:
+    Union[list[Chem.Mol], None], Union[list[Chem.Mol], None],
+    Union[list[list[str]], None]]:
     """
     Take the structures in the mol file and process them with
     replace_linkers.  Returns None if file can't be read.
@@ -544,11 +544,12 @@ def bulk_replace_linkers(mol_file: str, db_file: str,
     if suppl is None:
         return None, None, None
 
-    all_new_mols = []
-    all_query_cps = []
-    all_linker_smis = []
+    all_new_mols = {}
+    all_query_cps = {}
+    all_linker_smis = {}
+    parent_ids = []
     with cf.ProcessPoolExecutor(max_workers=num_procs) as pool:
-        futures = []
+        futures_to_mol_name = {}
         for i, mol in enumerate(suppl, 1):
             if not mol or not mol.GetNumAtoms():
                 continue
@@ -556,6 +557,7 @@ def bulk_replace_linkers(mol_file: str, db_file: str,
                 mol_name = mol.GetProp("_Name")
             except:
                 mol_name = f'Str_{i}'
+            parent_ids.append(mol_name)
             # Send it in and out of SMILES so it is in canonical SMILES order.
             mol_smi = Chem.MolToSmiles(mol)
             mol = Chem.MolFromSmiles(mol_smi)
@@ -563,15 +565,31 @@ def bulk_replace_linkers(mol_file: str, db_file: str,
             fut = pool.submit(replace_linkers, mol, db_file, max_heavies,
                               max_bonds, plus_length, minus_length, match_donors,
                               match_acceptors, max_mols_per_input)
-            futures.append(fut)
+            futures_to_mol_name[fut] = mol_name
 
-        for fut in cf.as_completed(futures):
+        for fut in cf.as_completed(futures_to_mol_name):
+            mol_name = futures_to_mol_name[fut]
             new_mols, query_cp, linker_smis = fut.result()
-            all_new_mols.append(new_mols)
-            all_query_cps.append(query_cp)
-            all_linker_smis.append(linker_smis)
+            all_new_mols[mol_name] = new_mols
+            all_query_cps[mol_name] = query_cp
+            all_linker_smis[mol_name] = linker_smis
 
-    return all_new_mols, all_query_cps, all_linker_smis
+    # put the output in input order
+    new_new_mols = []
+    new_parent_mols = []
+    new_linker_smis = []
+    for pid in parent_ids:
+        try:
+            if all_new_mols[pid]:
+                new_new_mols.extend(all_new_mols[pid])
+                new_parent_mols.extend([all_query_cps[pid]] * len(all_new_mols[pid]))
+                new_linker_smis.extend(all_linker_smis[pid])
+        except KeyError:
+            # For some reason, such as there were no linkers in
+            # the molecule, it produced no output.
+            pass
+
+    return new_new_mols, new_parent_mols, new_linker_smis
 
 
 def trim_linkers_by_length(conn: sqlite3.Connection, query_linker: str,
