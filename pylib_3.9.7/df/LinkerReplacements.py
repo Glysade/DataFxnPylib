@@ -54,6 +54,7 @@ class LinkerReplacements(DataFunction):
         self._plus_delta_bonds = -1
         self._minus_delta_bonds = -1
         self._match_hbonds = False
+        self._no_ring_linkers = False
         self._structure_column_name = None
         self._parent_mols = None
         self._parent_ids = None
@@ -70,6 +71,7 @@ class LinkerReplacements(DataFunction):
         self._minus_delta_bonds = integer_input_field(request,
                                                       'minusDeltaBonds')
         self._match_hbonds = boolean_input_field(request, 'matchHbonds')
+        self._no_ring_linkers = boolean_input_field(request, 'noRingLinkers')
         self._max_mols_per_input = integer_input_field(request,
                                                        'maxMolsPerInput')
         column_id = string_input_field(request, 'idColumn')
@@ -98,6 +100,7 @@ class LinkerReplacements(DataFunction):
         with cf.ProcessPoolExecutor(max_workers=num_cpus) as pool:
             futures_to_mol_id = {}
             for mol, mol_id in zip(self._parent_mols, self._parent_ids):
+                print(Chem.MolToSmiles(mol))
                 if mol is None or not mol:
                     continue
                 fut = pool.submit(replace_linkers, mol, LINKER_DB,
@@ -107,6 +110,7 @@ class LinkerReplacements(DataFunction):
                                   minus_length=self._minus_delta_bonds,
                                   match_donors=self._match_hbonds,
                                   match_acceptors=self._match_hbonds,
+                                  no_ring_linkers=self._no_ring_linkers,
                                   max_mols_per_input=self._max_mols_per_input)
                 futures_to_mol_id[fut] = mol_id
             for fut in cf.as_completed(futures_to_mol_id):

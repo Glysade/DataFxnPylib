@@ -33,12 +33,12 @@ class Linker:
     pieces off the linker and the whole of the parent molecule.
     """
 
-    def __init__(self, name: str, linker: str, mol: Chem.Mol,
+    def __init__(self, name: str, linker: Chem.Mol, mol: Chem.Mol,
                  left_mol: Chem.Mol, right_mol: Chem.Mol,
                  linker_atoms: Union[list[int], set[int]], linker_length: int,
                  num_donors: int, num_acceptors: int):
         self.name = name
-        self._linker = linker
+        self._linker_mol = linker
         # linker_atoms holds the indices of the atoms the linker in the
         # original molecule i.e. the mol_smiles.  Obviously that
         # assumes that the mol_smiles is in the same order as when
@@ -58,6 +58,7 @@ class Linker:
         self._reversed_right_smiles = None
 
         self._symmetrical = None
+        self._contains_ring = None
         self._path_length = linker_length
         self._num_donors = num_donors
         self._num_acceptors = num_acceptors
@@ -86,7 +87,7 @@ class Linker:
     @property
     def linker_smiles(self) -> str:
         if self._linker_smiles is None:
-            self._linker_smiles = Chem.MolToSmiles(self._linker)
+            self._linker_smiles = Chem.MolToSmiles(self._linker_mol)
         return self._linker_smiles
 
     @property
@@ -124,6 +125,12 @@ class Linker:
         if self._symmetrical is None:
             self._assign_symmetrical()
         return self._symmetrical
+
+    @property
+    def contains_ring(self) -> bool:
+        if self._contains_ring is None:
+            self._assign_contains_ring()
+        return self._contains_ring
 
     @property
     def num_donors(self) -> int:
@@ -166,7 +173,7 @@ class Linker:
             self._reversed_linker = Chem.MolToSmiles(Chem.MolFromSmiles(other_smi))
         return self._reversed_linker
 
-    def _assign_symmetrical(self):
+    def _assign_symmetrical(self) -> None:
         """
         Returns True if linker is symmetrical, which is decided by making a
         new mol with the :1 and :2 atom maps reversed and seeing if it has
@@ -176,6 +183,13 @@ class Linker:
         other_smi = self.reversed_linker
         check_smi = Chem.MolToSmiles(Chem.MolFromSmiles(other_smi))
         self._symmetrical = self.linker_smiles == check_smi
+
+    def _assign_contains_ring(self) -> None:
+        self._contains_ring = False
+        for atom in self._linker_mol.GetAtoms():
+            if atom.IsInRing():
+                self._contains_ring = True
+                break
 
 
 def create_mol_supplier(infile) -> Union[Chem.ForwardSDMolSupplier, Chem.SmilesMolSupplier, None]:
@@ -362,13 +376,15 @@ def split_linker(mol: Chem.Mol) -> list[list[Chem.Mol]]:
     return frag_sets
 
 
-def linker_is_ok(linker: Chem.Mol, max_heavies: int) -> bool:
+def linker_is_ok(linker: Chem.Mol, max_heavies: int,
+                 no_ring_linkers: bool) -> bool:
     """
     Returns True if the linker is acceptable, False otherwise.
     That means:
     a. No more than max_heavies, excluding dummies
-    b. No substituent more tnan 1 atom
-    c. If more than 3 atoms excluding dummies, must contain
+    b. Satisfies no_ring_linkers
+    c. No substituent more tnan 1 atom
+    d. If more than 3 atoms excluding dummies, must contain
        one of a ring bond, a multiple bond or a non-carbon
        atom
     The criterion for maximum number of bonds between ring atoms
@@ -376,6 +392,11 @@ def linker_is_ok(linker: Chem.Mol, max_heavies: int) -> bool:
     """
     if linker.GetNumAtoms() > max_heavies + 2:
         return False
+
+    if no_ring_linkers:
+        for atom in linker.GetAtoms():
+            if atom.IsInRing():
+                return False
 
     linker_frags = split_linker(linker)
     # print(f'linker : {Chem.MolToSmiles(linker)}  fragged :', end='')
@@ -546,7 +567,8 @@ def count_donors_and_acceptors(mol: Chem.Mol) -> tuple[int, int]:
 
 
 def find_linkers(mol_rec: tuple[Chem.Mol, str], max_heavies: int = 8,
-                 max_length: int = 5) -> tuple[str, list[Linker]]:
+                 max_length: int = 5,
+                 no_ring_linkers: bool = False) -> tuple[str, list[Linker]]:
     """
     Return the SMILES strings of all linkers found in the molecule,
     along with the left hand (attached to the [*:1]) and right hand
@@ -556,6 +578,7 @@ def find_linkers(mol_rec: tuple[Chem.Mol, str], max_heavies: int = 8,
         max_heavies: maximum number of heavy atoms in a linker
         max_length: maximum number of bonds in shortest path
                     between R group atoms.
+        no_ring_linkers:
 
     Returns:
         list of dicts containing the linkers and details about them.
@@ -577,7 +600,7 @@ def find_linkers(mol_rec: tuple[Chem.Mol, str], max_heavies: int = 8,
         #       f'  and {bond_pair[1].GetBeginAtomIdx()} -> {bond_pair[1].GetEndAtomIdx()}')
         left, linker, right = split_molecule(mol, bond_pair[0], bond_pair[1])
         linker_atoms = [a.GetIntProp('idx') for a in linker.GetAtoms() if a.GetAtomicNum()]
-        ok = linker_is_ok(linker, max_heavies)
+        ok = linker_is_ok(linker, max_heavies, no_ring_linkers)
         num_donors, num_acceptors = count_donors_and_acceptors(linker)
         if ok:
             # print(f'Linker {Chem.MolToSmiles(linker)} ok.')

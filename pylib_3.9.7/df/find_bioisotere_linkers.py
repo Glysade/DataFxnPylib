@@ -460,7 +460,7 @@ def find_bioisosteres_in_series(series: dict[str, Union[str, list[str]]],
                     if linker_i == linker_j:
                         continue
                     linker_j_mutant = copy.copy(linker_j)
-                    linker_j_mutant._linker = linker_i._linker
+                    linker_j_mutant._linker_mol = Chem.Mol(linker_i._linker_mol)
                     linker_j_mutant._linker_smiles = None
                     if linker_i == linker_j_mutant:
                         new_bio = Bioisostere(linker_i, linker_j, series['doc'])

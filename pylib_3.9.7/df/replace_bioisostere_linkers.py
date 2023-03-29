@@ -79,6 +79,10 @@ def parse_args(cli_args: list[str]):
                         help='If True and the query linker has an hbond'
                              ' acceptor, the replacement must too, and not if'
                              ' not.  If False, it will take either.')
+    parser.add_argument('--no-ring-linkers', dest='no_ring_linkers',
+                        action='store_true',
+                        help='By default, small rings can be linkers.  This'
+                             ' option removes that possibility.')
     parser.add_argument('--max-mols-per-input', dest='max_mols_per_input',
                         type=IntRange(-1), default=100,
                         help='Set a maximum number of products for each input'
@@ -217,6 +221,7 @@ def alter_atom_maps(mol: Chem.Mol, new_maps: list[tuple[int, int]]):
 def split_input_smiles(query_mol: Chem.Mol, linker_smis: list[str],
                        linker_atoms: list[list[int]],
                        max_heavies: int, max_bonds: int,
+                       no_ring_linkers: bool,
                        linker_num: list[int]) -> Chem.Mol:
     """
     Take the molecule and split on any linkers to produce a
@@ -233,7 +238,8 @@ def split_input_smiles(query_mol: Chem.Mol, linker_smis: list[str],
     """
     new_mol = Chem.Mol(query_mol)
     _, linkers = fl.find_linkers((new_mol, ''), max_heavies=max_heavies,
-                                 max_length=max_bonds)
+                                 max_length=max_bonds,
+                                 no_ring_linkers=no_ring_linkers)
     # print(f'depth = {len(linker_smis)} : linker num {linker_num[0]}')
     if not linkers:
         return query_mol
@@ -242,7 +248,7 @@ def split_input_smiles(query_mol: Chem.Mol, linker_smis: list[str],
 
     linker_num[0] += 1
     new_maps = [(1, 2 * linker_num[0] - 1), (2, 2 * linker_num[0])]
-    new_linker = Chem.Mol(linkers[0]._linker)
+    new_linker = Chem.Mol(linkers[0]._linker_mol)
     alter_atom_maps(new_linker, new_maps)
     new_left_mol = Chem.Mol(linkers[0]._left_mol)
     alter_atom_maps(new_left_mol, new_maps)
@@ -259,10 +265,11 @@ def split_input_smiles(query_mol: Chem.Mol, linker_smis: list[str],
     linker_atoms.append(lats)
 
     new_left_mol = split_input_smiles(new_left_mol, linker_smis, linker_atoms,
-                                      max_heavies, max_bonds, linker_num)
+                                      max_heavies, max_bonds, no_ring_linkers,
+                                      linker_num)
     new_right_mol = split_input_smiles(new_right_mol, linker_smis,
                                        linker_atoms, max_heavies, max_bonds,
-                                       linker_num)
+                                       no_ring_linkers, linker_num)
 
     new_mol = Chem.RWMol()
     new_mol.InsertMol(new_left_mol)
@@ -395,6 +402,7 @@ def replace_linkers(query_mol: Chem.Mol, db_file: Union[str, Path],
                     max_heavies: int, max_bonds: int,
                     plus_length: int, minus_length: int,
                     match_donors: bool, match_acceptors: bool,
+                    no_ring_linkers: bool,
                     max_mols_per_input: int) -> tuple[
     list[Chem.Mol], Union[None, Chem.Mol], Union[None, list[list[str]]]]:
     """
@@ -425,6 +433,7 @@ def replace_linkers(query_mol: Chem.Mol, db_file: Union[str, Path],
         minus_length:
         match_donors:
         match_acceptors:
+        no_ring_linkers:
         max_mols_per_input: Maximum number of product results for each
                             input molecule.  A random subset will be
                             returned if this is exceeded. -1 means no
@@ -448,7 +457,8 @@ def replace_linkers(query_mol: Chem.Mol, db_file: Union[str, Path],
     linker_num = [3]
     # print(f'query-mol : {Chem.MolToSmiles(query_mol)}')
     split_mol = split_input_smiles(query_cp, linker_smis, linker_atoms,
-                                   max_heavies, max_bonds, linker_num)
+                                   max_heavies, max_bonds, no_ring_linkers,
+                                   linker_num)
     if not linker_smis:
         return [], None, None
 
@@ -458,7 +468,8 @@ def replace_linkers(query_mol: Chem.Mol, db_file: Union[str, Path],
     for i, lsmi in enumerate(linker_smis, 1):
         # print(f'{i} : {lsmi} : {linker_atoms[i - 1]}')
         bios = fetch_bioisosteres(lsmi, db_file, plus_length, minus_length,
-                                  match_donors, match_acceptors)
+                                  match_donors, match_acceptors,
+                                  no_ring_linkers)
         # include the original linker if needed
         if lsmi not in bios:
             bios = [lsmi] + bios
@@ -498,7 +509,7 @@ def bulk_replace_linkers(mol_file: str, db_file: str,
                          max_heavies: int, max_bonds: int,
                          plus_length: int, minus_length: int,
                          match_donors: bool, match_acceptors: bool,
-                         max_mols_per_input: int,
+                         no_ring_linkers: bool, max_mols_per_input: int,
                          num_procs: int) -> tuple[
     Union[list[Chem.Mol], None], Union[list[Chem.Mol], None],
     Union[list[list[str]], None]]:
@@ -522,6 +533,7 @@ def bulk_replace_linkers(mol_file: str, db_file: str,
         minus_length:
         match_donors:
         match_acceptors:
+        no_ring_linkers:
         max_mols_per_input:
 
     Returns:
@@ -550,8 +562,9 @@ def bulk_replace_linkers(mol_file: str, db_file: str,
             mol = Chem.MolFromSmiles(mol_smi)
             mol.SetProp('_Name', mol_name)
             fut = pool.submit(replace_linkers, mol, db_file, max_heavies,
-                              max_bonds, plus_length, minus_length, match_donors,
-                              match_acceptors, max_mols_per_input)
+                              max_bonds, plus_length, minus_length,
+                              match_donors, match_acceptors, no_ring_linkers,
+                              max_mols_per_input)
             futures_to_mol_name[fut] = mol_name
 
         for fut in cf.as_completed(futures_to_mol_name):
@@ -656,7 +669,8 @@ def extract_dummy_atoms_from_smiles(smiles: str) -> tuple[str, str]:
 
 def fetch_bioisosteres(linker_smi: str, db_file: str,
                        plus_length: int, minus_length: int,
-                       match_donors: bool, match_acceptors: bool) -> Optional[list[str]]:
+                       match_donors: bool, match_acceptors: bool,
+                       no_ring_linkers: bool) -> Optional[list[str]]:
     """
     Pull all bioisosteres from db_file that include the linker_smi
     on one side or the other.  Returns SMILES strings of the
@@ -679,6 +693,7 @@ def fetch_bioisosteres(linker_smi: str, db_file: str,
         minus_length:
         match_donors:
         match_acceptors:
+        no_ring_linkers:
 
     Returns:
         SMILES strings in a list
@@ -730,11 +745,25 @@ def fetch_bioisosteres(linker_smi: str, db_file: str,
         final_bios.append(b.replace('[*:1]', new1).replace('[*:2]', new2))
         final_bios.append(b.replace('[*:2]', new1).replace('[*:1]', new2))
 
-    # symmetrical ones will have given the same thing twice, so remove them.
-    final_bios = [Chem.MolToSmiles(Chem.MolFromSmiles(b)) for b in final_bios]
+    # symmetrical ones will have given the same thing twice, so remove them,
+    # and enforce no_ring_linkers at the same time since both require a
+    # molecule object to be created.
+    new_final_bios = []
+    for b in final_bios:
+        bmol = Chem.MolFromSmiles(b)
+        if no_ring_linkers:
+            ring = False
+            for atom in bmol.GetAtoms():
+                if atom.IsInRing():
+                    ring = True
+                    break
+            if ring:
+                continue
+        new_final_bios.append(Chem.MolToSmiles(bmol))
+
     # It's not essential that final_bios is sorted, but it makes testing
     # easier if the order is always consistent.
-    final_bios = sorted(list(set(final_bios)))
+    final_bios = sorted(list(set(new_final_bios)))
     return final_bios
 
 
@@ -790,20 +819,21 @@ def main(cli_args):
     if args.query_smiles is not None:
         if not check_smiles(args.query_smiles):
             return False
-        ret_mols, query_cp, _ = replace_linkers(args.query_smiles, args.db_file,
-                                                args.max_heavies, args.max_bonds,
-                                                args.plus_length, args.minus_length,
-                                                args.match_donors, args.match_acceptors,
-                                                args.max_mols_per_input)
+        ret_mols, query_cp, _ = \
+            replace_linkers(args.query_smiles, args.db_file, args.max_heavies,
+                            args.max_bonds, args.plus_length,
+                            args.minus_length, args.match_donors,
+                            args.match_acceptors, args.no_ring_linkers,
+                            args.max_mols_per_input)
         new_mols = [ret_mols]
     else:
-        new_mols, query_cps, _ = bulk_replace_linkers(args.input_file, args.db_file,
-                                                      args.max_heavies, args.max_bonds,
-                                                      args.plus_length, args.minus_length,
-                                                      args.match_donors,
-                                                      args.match_acceptors,
-                                                      args.max_mols_per_input,
-                                                      args.num_procs)
+        new_mols, query_cps, _ = \
+            bulk_replace_linkers(args.input_file, args.db_file,
+                                 args.max_heavies, args.max_bonds,
+                                 args.plus_length, args.minus_length,
+                                 args.match_donors, args.match_acceptors,
+                                 args.max_mols_per_input, args.no_ring_linkers,
+                                 args.num_procs)
     if new_mols is None or not new_mols:
         return False
 
