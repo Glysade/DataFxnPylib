@@ -5,6 +5,7 @@
 
 import argparse
 import concurrent.futures as cf
+import random
 import re
 import sqlite3
 import sys
@@ -12,7 +13,6 @@ import sys
 from collections import defaultdict
 from os import cpu_count
 from pathlib import Path
-from random import shuffle
 from typing import Optional, Union
 
 from rdkit import rdBase, Chem
@@ -80,13 +80,14 @@ def parse_args(cli_args: list[str]):
                              ' acceptor, the replacement must too, and not if'
                              ' not.  If False, it will take either.')
     parser.add_argument('--max-mols-per-input', dest='max_mols_per_input',
-                        type=IntRange(1), default=100,
+                        type=IntRange(-1), default=100,
                         help='Set a maximum number of products for each input'
                              ' molecule.  With several common linkers, the'
                              ' combinatorial explosion can make the results'
                              ' set too larger.  If the maximum is exceeded, a'
                              ' random selection of the requisite number is'
-                             ' made.  Default=%(default)s.')
+                             ' made.  Default=%(default)s, -1 means no'
+                             ' maximum.')
     parser.add_argument('--num-procs', dest='num_procs',
                         type=IntRange(1), default=cpu_count() - 1,
                         help='Number of processors to use for parallel'
@@ -349,30 +350,24 @@ def fettled_linker_smis(linker_smi: str) -> list[str]:
     return out_smis
 
 
-def random_selection_of_mols(mols: list[Chem.Mol], linker_smis: list[str],
-                             num_to_have: int) -> tuple[list[Chem.Mol], list[str]]:
-    """
-    Take a matching random sample of the input lists up to num_to_have
-    in size.
-    """
-    all_indices = [i for i in range(len(mols))]
-    shuffle(all_indices)
-    new_mols = []
-    new_linker_smis = []
-    for al in all_indices[:num_to_have + 1]:
-        new_mols.append(mols[al])
-        new_linker_smis.append(linker_smis[al])
-
-    return new_mols, new_linker_smis
-
-
 def zip_up_mols(mols: list[Chem.Mol], linker_smis: list[str],
                 query_smi: str, num_to_have: int,
                 name_stem: str) -> tuple[list[Chem.Mol], list[list[str]]]:
     zipped_mols = []
     final_linker_smis = []
     zipped_smis = {}
-    for new_mol, new_linker_smi in zip(mols, linker_smis):
+
+    # Take a random selection if there are more molecules than
+    # required.  Doing it this way allows for removal of duplicates.
+    mols_to_have = [i for i in range(len(mols))]
+    if num_to_have == -1 or len(mols) < num_to_have:
+        num_to_have = len(mols)
+    else:
+        random.shuffle(mols_to_have)
+
+    for i in mols_to_have:
+        new_mol = mols[i]
+        new_linker_smi = linker_smis[i]
         # print(new_linker_smis[i])
         zip_mol = rdmolops.molzip(new_mol)
         zip_smi = Chem.MolToSmiles(zip_mol)
@@ -382,8 +377,7 @@ def zip_up_mols(mols: list[Chem.Mol], linker_smis: list[str],
         # keep track of duplicates
         if zip_smi in zipped_smis:
             continue
-        else:
-            zipped_smis[zip_smi] = len(zipped_mols)
+        zipped_smis[zip_smi] = len(zipped_mols)
         # Not colouring at the moment, see replace_linkers for
         # discussion.
         # add_linker_color_props(zip_mol)
@@ -433,7 +427,8 @@ def replace_linkers(query_mol: Chem.Mol, db_file: Union[str, Path],
         match_acceptors:
         max_mols_per_input: Maximum number of product results for each
                             input molecule.  A random subset will be
-                            returned if this is exceeded.
+                            returned if this is exceeded. -1 means no
+                            max.
 
     Returns:
         new molecules
@@ -479,13 +474,6 @@ def replace_linkers(query_mol: Chem.Mol, db_file: Union[str, Path],
         new_mols = next_new_mols
         new_linker_smis = next_new_linker_smis
 
-    # Allow for query_mol to appear in the output, in which case it
-    # is removed below.
-    if len(new_mols) > max_mols_per_input:
-        new_mols, new_linker_smis = \
-            random_selection_of_mols(new_mols, new_linker_smis,
-                                     max_mols_per_input + 1)
-
     # Colouring the linkers really slows things down, and there's a
     # a problem with the parallel version - properties aren't pickled
     # by default so when doing a parallel run the colours are lost in
@@ -500,7 +488,6 @@ def replace_linkers(query_mol: Chem.Mol, db_file: Union[str, Path],
     except KeyError:
         query_name = 'Str'
     query_smi = Chem.MolToSmiles(query_mol)
-
     zipped_mols, final_linker_smis = zip_up_mols(new_mols, new_linker_smis,
                                                  query_smi, max_mols_per_input,
                                                  query_name)
