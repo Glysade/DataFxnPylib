@@ -60,15 +60,15 @@ def load_replacements_data() -> dict[str: tuple[list[str], list[str]]]:
 def make_rgroup_lookup_smi(mol: Chem.Mol) -> tuple[str, int, bool]:
     """
     Take the RGroup, which is expected to have atom mappings (via
-    isotope numbers) on the
-    dummy atoms, and return a new SMILES with the first atom mapping
-    removed and its atom map number.  There will sometimes
-    be polydentate RGroups which won't have a replacement in the table
-    so don't need to be handled - it's fine if they are left with
-    dangling atom maps as they will be placed straight back onto the
-    core.  A bool is returned to show if this is the case or not.
-    Operations are carried out on a copy of the molecule, so it is
-    not affected.
+    isotope numbers) on the dummy atoms, and return a new SMILES with
+    the first atom mapping removed and its atom map number.
+    There may also be an actual map number, which will also be removed.
+    There will sometimes be polydentate RGroups which won't have a
+    replacement in the table so don't need to be handled - it's fine
+    if they are left with dangling atom maps as they will be placed
+    straight back onto the core.  A bool is returned to show if this is
+    the case or not. Operations are carried out on a copy of the
+    molecule, so it is not affected.
     """
     mol_cp = Chem.Mol(mol)
     # The incoming R Groups aren't sanitized, but they need to be for
@@ -80,6 +80,7 @@ def make_rgroup_lookup_smi(mol: Chem.Mol) -> tuple[str, int, bool]:
         if atom.GetAtomicNum() == 0:
             atom_map_num = atom.GetIsotope()
             atom.SetIsotope(0)
+            atom.SetAtomMapNum(0)
             break
     smi = Chem.MolToSmiles(mol_cp)
     num_stars = sum(1 for i in range(len(smi)) if smi[i] == '*')
