@@ -57,7 +57,6 @@ class Linker:
         self._reversed_left_smiles = None
         self._reversed_right_smiles = None
 
-        self._symmetrical = None
         self._contains_ring = None
         self._path_length = linker_length
         self._num_donors = num_donors
@@ -122,9 +121,7 @@ class Linker:
 
     @property
     def symmetrical(self) -> bool:
-        if self._symmetrical is None:
-            self._assign_symmetrical()
-        return self._symmetrical
+        return self.linker_smiles == self.reversed_linker
 
     @property
     def contains_ring(self) -> bool:
@@ -163,8 +160,8 @@ class Linker:
     @property
     def reversed_linker(self) -> str:
         """
-        Make SMILES string of reversed linker i.e. [*:1] becomes [*:2]
-        and vice versa.
+        Make canonical SMILES string of reversed linker i.e.
+        [*:1] becomes [*:2] and vice versa.
         """
         if self._reversed_linker is None:
             other_smi = self.linker_smiles.replace('[*:1]', '[*:XX]')
@@ -172,17 +169,6 @@ class Linker:
             other_smi = other_smi.replace('[*:XX]', '[*:2]')
             self._reversed_linker = Chem.MolToSmiles(Chem.MolFromSmiles(other_smi))
         return self._reversed_linker
-
-    def _assign_symmetrical(self) -> None:
-        """
-        Returns True if linker is symmetrical, which is decided by making a
-        new mol with the :1 and :2 atom maps reversed and seeing if it has
-        the same canonical SMILES.  Assumes linker_smi is already
-        canonical.
-        """
-        other_smi = self.reversed_linker
-        check_smi = Chem.MolToSmiles(Chem.MolFromSmiles(other_smi))
-        self._symmetrical = self.linker_smiles == check_smi
 
     def _assign_contains_ring(self) -> None:
         self._contains_ring = False
@@ -362,15 +348,17 @@ def split_linker(mol: Chem.Mol) -> list[list[Chem.Mol]]:
                 #       f' :: {bond.GetBondType()}')
                 fragged_mol = rdmolops.FragmentOnBonds(mol, [bond.GetIdx()],
                                                        addDummies=False)
-                frags = rdmolops.GetMolFrags(fragged_mol, asMols=True,
-                                             sanitizeFrags=False)
+                frags = rdmolops.GetMolFrags(fragged_mol, sanitizeFrags=False)
                 for frag in frags:
                     num_dummies = 0
-                    for atom in frag.GetAtoms():
-                        if not atom.GetAtomicNum():
+                    for atom_idx in frag:
+                        if not mol.GetAtomWithIdx(atom_idx).GetAtomicNum():
                             num_dummies += 1
-                    if num_dummies and num_dummies == 2:
-                        frag_sets.append(list(frags))
+                    if num_dummies == 2:
+                        frag_mols = rdmolops.GetMolFrags(fragged_mol,
+                                                         asMols=True,
+                                                         sanitizeFrags=False)
+                        frag_sets.append(list(frag_mols))
     if not frag_sets:
         frag_sets = [[Chem.Mol(mol)]]
     return frag_sets
@@ -440,24 +428,28 @@ def split_molecule(mol: Chem.Mol, bond1: Chem.Bond,
     split_mol = rdmolops.FragmentOnBonds(mol, [bond1.GetIdx(), bond2.GetIdx()],
                                          dummyLabels=[(1, 1), (2, 2)])
     split_frags = rdmolops.GetMolFrags(split_mol, asMols=True)
+
     left_mol = None
     right_mol = None
     linker = None
     for sf in split_frags:
         # print(f'split frag : {Chem.MolToSmiles(sf)}')
-        dummies = []
+        num_dummies = 0
+        dummy_val = -1
         for atom in sf.GetAtoms():
             if not atom.GetAtomicNum() and atom.GetIsotope():
-                dummies.append(atom.GetIsotope())
+                dummy_val = atom.GetIsotope()
+                num_dummies += 1
                 atom.SetAtomMapNum(atom.GetIsotope())
                 atom.SetIsotope(0)
-        # print(f'{Chem.MolToSmiles(sf)} : {dummies}')
-        if len(dummies) == 1:
-            if dummies[0] == 1:
+                if num_dummies == 2:
+                    break
+        if num_dummies == 1:
+            if dummy_val == 1:
                 left_mol = sf
-            elif dummies[0] == 2:
+            elif dummy_val == 2:
                 right_mol = sf
-        elif len(dummies) == 2:
+        elif num_dummies == 2:
             linker = sf
 
     # print(f'left, linker, right : {Chem.MolToSmiles(left_mol)},'
