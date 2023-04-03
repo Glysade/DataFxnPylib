@@ -465,7 +465,7 @@ def split_molecule(mol: Chem.Mol, bond1: Chem.Bond,
     return left_mol, linker, right_mol
 
 
-def find_linker_bonds(mol: Chem.Mol, max_length: int) -> list[tuple[Chem.Bond, Chem.Bond, int]]:
+def find_linker_bonds1(mol: Chem.Mol, max_length: int) -> list[tuple[Chem.Bond, Chem.Bond, int]]:
     """
     Find all the pairs of bonds that can be the start and end of a
     linker.
@@ -483,18 +483,19 @@ def find_linker_bonds(mol: Chem.Mol, max_length: int) -> list[tuple[Chem.Bond, C
     # ring.
     sssr_info = mol.GetRingInfo()
     linker_bonds = []
+
     for at1 in mol.GetAtoms():
-        if not at1.IsInRing():
+        if not at1.IsInRing() or at1.GetDegree() < 3:
             continue
         at1_bonds = [b for b in at1.GetBonds() if not b.IsInRing()]
         if not at1_bonds:
             continue
         at1_idx = at1.GetIdx()
         for at2 in mol.GetAtoms():
-            if not at2.IsInRing():
-                continue
             at2_idx = at2.GetIdx()
             if at2_idx <= at1_idx:
+                continue
+            if not at2.IsInRing() or at2.GetDegree() < 3:
                 continue
             length = dist_mat[at1_idx][at2_idx]
             if length == 1 or length > max_length:
@@ -514,6 +515,74 @@ def find_linker_bonds(mol: Chem.Mol, max_length: int) -> list[tuple[Chem.Bond, C
                     if length > dist_mat[e_at1][e_at2]:
                         linker_bonds.append((b1, b2, length))
 
+    return linker_bonds
+
+
+def find_linker_bonds(mol: Chem.Mol, max_length: int) -> list[tuple[Chem.Bond, Chem.Bond, int]]:
+    """
+    Find all the pairs of bonds that can be the start and end of a
+    linker.
+    This means one end of each is a ring atom not in the same SSSR ring,
+    no more than max_length bonds apart, and neither is a ring bond
+    itself.
+    Returns a list of the 2 bonds and the distance between the ring
+    atoms.
+    """
+    dist_mat = rdmolops.GetDistanceMatrix(mol)
+    # The SSSRs in GetRingInfo are useful but not the final answer.
+    # For example, in the 3 ring fused system C12COCCC2CC3CCCNC3C1 the
+    # O and N atoms (indices 2 and 11) are recorded as not being in
+    # the same ring even though they are both in the outer 14 atom
+    # ring.
+    sssr_info = mol.GetRingInfo()
+
+    linker_bonds = []
+    nrbs = []
+    for bond in mol.GetBonds():
+        if bond.IsInRing():
+            continue
+        if (not bond.GetBeginAtom().IsInRing()
+                and not bond.GetEndAtom().IsInRing()):
+            continue
+        if (bond.GetBeginAtom().GetDegree() == 1
+                or bond.GetEndAtom().GetDegree() == 1):
+            continue
+        nrbs.append(bond)
+
+    # print(f'number of nrbs {len(nrbs)}')
+    # for nrb in nrbs:
+    #     print(f'nrb : {nrb.GetIdx()} : {nrb.GetBeginAtomIdx()} -> {nrb.GetEndAtomIdx()} : {nrb.GetBondType()}')
+    for i in range(len(nrbs) - 1):
+        i_bat = nrbs[i].GetBeginAtomIdx()
+        i_eat = nrbs[i].GetEndAtomIdx()
+        for j in range(i + 1, len(nrbs)):
+            # print(f'doing bond {nrbs[i].GetIdx()} and {nrbs[j].GetIdx()}')
+            j_bat = nrbs[j].GetBeginAtomIdx()
+            j_eat = nrbs[j].GetEndAtomIdx()
+            furthest_dist = dist_mat[i_bat][j_bat]
+            furthest_pair = (i_bat, j_bat)
+            if dist_mat[i_bat][j_eat] > furthest_dist:
+                furthest_dist = dist_mat[i_bat][j_eat]
+                furthest_pair = (i_bat, j_eat)
+            if dist_mat[i_eat][j_bat] > furthest_dist:
+                furthest_dist = dist_mat[i_eat][j_bat]
+                furthest_pair = (i_eat, j_bat)
+            if dist_mat[i_eat][j_eat] > furthest_dist:
+                furthest_dist = dist_mat[i_eat][j_eat]
+                furthest_pair = (i_eat, j_eat)
+            # print(f'furthest pair : {furthest_pair} at {furthest_dist}')
+            if furthest_dist > max_length:
+                # print('tool long')
+                continue
+            if (not mol.GetAtomWithIdx(furthest_pair[0]).IsInRing() or
+                    not mol.GetAtomWithIdx(furthest_pair[1]).IsInRing()):
+                # print('one end not ring')
+                continue
+            linker_bonds.append((nrbs[i], nrbs[j], furthest_dist))
+
+    # print(f'number of possible linker bonds : {len(linker_bonds)}')
+    # for lb in linker_bonds:
+    #     print(f'{lb[0].GetIdx()} and {lb[1].GetIdx()} at {lb[2]}')
     return linker_bonds
 
 
@@ -583,7 +652,7 @@ def find_linkers(mol_rec: tuple[Chem.Mol, str], max_heavies: int = 8,
     Returns:
         list of dicts containing the linkers and details about them.
     """
-    # print(f'find_linkers for {mol_rec[0]} : {mol_rec[1]}')
+    # print(f'find_linkers for {Chem.MolToSmiles(mol_rec[0])} : {mol_rec[1]}')
     mol = mol_rec[0]
     if mol is None or not mol:
         return mol_rec[1], []
