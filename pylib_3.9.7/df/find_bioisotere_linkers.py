@@ -361,7 +361,8 @@ def summarise_series(series: list[dict]) -> None:
     min = len(series[-1]['SMILES'])
     median = len(series[num_sers // 2]['SMILES'])
     print(f'Number of series : {len(series)}  median size : {median}'
-          f'  mean size : {mean_size:6.2f} max : {max} ({series[0]["assay"]})  min : {min}')
+          f'  mean size : {mean_size:6.2f} max : {max} ({series[0]["assay"]})'
+          f'  min : {min}', flush=True)
     # for i, ser in enumerate(series[:20]):
     #     print(f'Series {i} size : {len(ser["SMILES"])}')
 
@@ -447,6 +448,7 @@ def find_bioisosteres_in_series(series: dict[str, Union[str, list[str]]],
             The list of biaisosteres
     """
     molecules = [(smi, name) for smi, name in zip(series['SMILES'], series['ChEMBLID'])]
+    print(f'Finding bioisosteres for {len(molecules)} molecules.', flush=True)
     linkers = fl.find_all_linkers(molecules, max_heavies=max_heavies,
                                   max_length=max_bonds)
     linker_smis = list(linkers.keys())
@@ -461,7 +463,7 @@ def find_bioisosteres_in_series(series: dict[str, Union[str, list[str]]],
                         continue
                     linker_j_mutant = copy.copy(linker_j)
                     linker_j_mutant._linker_mol = Chem.Mol(linker_i._linker_mol)
-                    linker_j_mutant._linker_smiles = None
+                    linker_j_mutant._linker_smiles = linker_i.linker_smiles
                     if linker_i == linker_j_mutant:
                         new_bio = Bioisostere(linker_i, linker_j, series['doc'])
                         add_bioisosteres_if_different(new_bio, bioisosteres)
@@ -480,6 +482,7 @@ def write_series_json(series: list[dict[str, Union[str, list[str]]]], json_file:
         print(f'ERROR : failed to write file {json_file}.')
         return False
 
+    print(f'Written {len(series)} series to {json_file}.')
     return True
 
 
@@ -495,6 +498,7 @@ def read_series_json(json_file: str) -> Optional[list[dict[str, Union[str, list[
         print(f'ERROR : failed to read file {json_file}.')
         return None
 
+    print(f'Read {len(series)} series from {json_file}.', flush=True)
     return series
 
 
@@ -514,6 +518,7 @@ def extract_bioisosteres(series: list[dict[str, Union[str, list[str]]]],
     Returns:
 
     """
+    print(f'Extracting bioisosteres from {len(series)} series.', flush=True)
 
     def merge_bioisosteres(new_bios, old_bios):
         if old_bios is None:
@@ -702,11 +707,11 @@ def write_bioisostere_table(biososteres: list[Bioisostere],
             htmlf.write('<tr>')
             htmlf.write(f'<td>{i} : {bios.num_docs}</td>')
             htmlf.write(f'<td><img src={l1img} /></td>')
-            htmlf.write(f'<td><img src={l1eximg}/></td>')
-            htmlf.write(f'<td><img src={l2img}/></td>')
-            htmlf.write(f'<td><img src={l2eximg}/></td>')
+            htmlf.write(f'<td><img src={l1eximg} /></td>')
+            htmlf.write(f'<td><img src={l2img} /></td>')
+            htmlf.write(f'<td><img src={l2eximg} /></td>')
             htmlf.write(f'<td>{ex[2]}</td>')
-            htmlf.write(f'</tr>')
+            htmlf.write(f'</tr>\n')
 
     finish_html_file(htmlf)
 
@@ -853,9 +858,9 @@ def main(cli_args):
     print(f'Number of bioisosteres : {len(bioisosteres)}')
     for bios in bioisosteres:
         print(bios)
-        for ex in bios.examples:
-            print(f'  {ex[0].name} {ex[0].mol_smiles} ::'
-                  f' {ex[1].name} {ex[1].mol_smiles}')
+        # for ex in bios.examples:
+        #     print(f'  {ex[0].name} {ex[0].mol_smiles} ::'
+        #           f' {ex[1].name} {ex[1].mol_smiles}')
 
     if args.html_file is not None:
         write_bioisostere_table(bioisosteres, html_file=args.html_file,
