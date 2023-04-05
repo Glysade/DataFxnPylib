@@ -79,8 +79,10 @@ def make_rgroup_lookup_smi(mol: Chem.Mol) -> tuple[str, int, bool]:
     for atom in mol_cp.GetAtoms():
         if atom.GetAtomicNum() == 0:
             atom_map_num = atom.GetIsotope()
+            # Clear out any atom map info.
             atom.SetIsotope(0)
             atom.SetAtomMapNum(0)
+            atom.ClearProp('molAtomMapNumber')
             break
     smi = Chem.MolToSmiles(mol_cp)
     num_stars = sum(1 for i in range(len(smi)) if smi[i] == '*')
