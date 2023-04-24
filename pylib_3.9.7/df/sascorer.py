@@ -64,7 +64,7 @@ _fscores = None
 SCORES_FILE = Path(__file__).parent.parent.parent / 'Data' / 'surechembl_scores.pkl.gz'
 
 
-def readFragmentScores(name='fpscores.pkl.gz'):
+def readFragmentScores(name=SCORES_FILE):
     import gzip
     global _fscores
     # generate the full path filename:
