@@ -20,7 +20,9 @@ from typing import Iterable, Union, List, Optional
 from rdkit import Chem
 from rdkit.Chem import AllChem, RWMol, SanitizeFlags
 from rdkit.Chem.rdChemReactions import ChemicalReaction
+from rdkit.Chem import rdmolops
 from rdkit.Chem.rdchem import Mol, KekulizeException, AtomValenceException, Atom, MolSanitizeException
+from rdkit.Chem.MolStandardize import rdMolStandardize
 from rdkit.Geometry.rdGeometry import Point3D
 
 
@@ -65,7 +67,7 @@ def type_to_format(type: str) -> RDKitFormat:
 
 
 def string_to_mol(type: RDKitFormat, mol_string: str,
-                  do_sanitize_mol: Optional[bool]=True) -> Optional[Union[Mol, ChemicalReaction]]:
+                  do_sanitize_mol: Optional[bool] = True) -> Optional[Union[Mol, ChemicalReaction]]:
     """
     Converts a string to an RDKit molecule
 
@@ -164,7 +166,7 @@ def _standardize_rgroups(mol: Mol) -> None:
             atom.SetProp('_MolFileRLabel', str(group_number))
 
 
-def sdf_to_mol(mol_string: str, do_sanitize_mol: Optional[bool]=True) -> Optional[Mol]:
+def sdf_to_mol(mol_string: str, do_sanitize_mol: Optional[bool] = True) -> Optional[Mol]:
     # if we want SD tags we need to use a supplier as Chem.MolFromMolBlock does not process SD tags
     sdf_in = BytesIO(mol_string.encode('UTF-8'))
     supplier = Chem.ForwardSDMolSupplier(sdf_in, sanitize=False)
@@ -194,6 +196,52 @@ def sanitize_mol(mol: Mol) -> None:
         print('Kekulization error for molecule {}'.format(Chem.MolToSmiles(mol)))
         flags = SanitizeFlags.SANITIZE_ALL ^ SanitizeFlags.SANITIZE_KEKULIZE
         Chem.SanitizeMol(mol, flags)
+
+
+def standardize_mol(mol: Chem.Mol,
+                    normer: Optional[rdMolStandardize.Normalizer] = None,
+                    uncharger: Optional[rdMolStandardize.Uncharger] = None,
+                    metal_disconnector: Optional[rdMolStandardize.MetalDisconnector] = None,
+                    fix_azide: Optional[Chem.Mol] = None) -> Optional[Chem.Mol]:
+    # Use the RDKit standardization routines to put things in a
+    # consistent form.  Returns a standardized copy of the original
+    # mol.
+    # SureChEMBL has some odd azides that the normalizer doesn't touch
+    # and which RDKit objects to.
+    if fix_azide is None:
+        fix_azide = AllChem.ReactionFromSmarts('[N-:1]=[N:2]#[N+:3]>>[N+0:1]#[N+:2][N-:3]')
+    if normer is None:
+        normer = rdMolStandardize.Normalizer()
+    if uncharger is None:
+        uncharger = rdMolStandardize.Uncharger()
+    if metal_disconnector is None:
+        metal_disconnector = rdMolStandardize.MetalDisconnector()
+
+    try:
+        norm_mol = Chem.Mol(mol)
+        prod = fix_azide.RunReactants((norm_mol,))
+        if prod:
+            norm_mol = prod[0][0]
+
+        norm_mol = rdmolops.RemoveHs(norm_mol)
+        norm_mol = normer.normalize(norm_mol)
+        norm_mol = uncharger.uncharge(norm_mol)
+        norm_mol = rdMolStandardize.Reionize(norm_mol)
+        norm_mol = rdMolStandardize.FragmentParent(norm_mol)
+        norm_mol = metal_disconnector.Disconnect(norm_mol)
+        norm_mol = rdMolStandardize.CanonicalTautomer(norm_mol)
+    except (Chem.rdchem.AtomValenceException, Chem.rdchem.KekulizeException,
+            RuntimeError) as err:
+        try:
+            mol_name = mol.GetProp('_Name')
+        except KeyError:
+            mol_name = 'molecule'
+        print(f'Error processing {mol_name} :'
+              f' {Chem.MolToSmiles(mol)}: normalization failed : \n{err}')
+        return None
+
+    sanitize_mol(norm_mol)
+    return norm_mol
 
 
 def smiles_to_mol(smiles: str) -> Optional[Mol]:
