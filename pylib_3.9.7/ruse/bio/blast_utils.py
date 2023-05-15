@@ -97,6 +97,7 @@ class SequenceMatcher(object):
     def match_sequences(cls, seq: str, sub: str) -> int:
         """
         A class method to determine the the first position that an ambiguous dna subsequence can match a dna sequence
+
         :param seq: The main sequence
         :param sub: Subsequence
         :return: The position of start of the first match of the subsequence to the sequence, or -1 if no such match exists

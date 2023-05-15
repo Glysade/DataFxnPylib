@@ -98,7 +98,7 @@ class InputField(BaseModel):
 
 class ColumnData(BaseModel):
     """
-    A data model class containing Spotfire a Spotfire column.
+    A data model class containing a Spotfire column.
     Used when the data function contains column inputs and should be instantiated when the data function is
     returning column outputs
     """

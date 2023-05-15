@@ -28,6 +28,7 @@ logLevel = Level.All
 def debug(*args):
     """
     Log a debug message
+
     :param args: messages
     """
 

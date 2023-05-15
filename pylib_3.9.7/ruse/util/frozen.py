@@ -13,6 +13,7 @@ See http://code.activestate.com/recipes/252158-how-to-freeze-python-classes/
 def frozen(set):
     """
     Raise an error when trying to set an undeclared name, or when calling
+
     :param set: default attribute setter
     :return: new attribute setter
     """

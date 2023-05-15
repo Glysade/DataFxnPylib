@@ -135,6 +135,7 @@ def extract_feature(record: SeqRecord, feature_id: str = None, qualifier_name: s
 def sub_sequence(record: SeqRecord, start: int, end: int) -> Optional[SeqRecord]:
     """
     Extract a sequence range from a :class:`SeqRecord` while copying annotations
+
     :param record: sequence to extract range from
     :param start: start of sequence range
     :param end: end of sequence range

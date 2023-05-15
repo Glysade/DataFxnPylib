@@ -6,7 +6,7 @@ Getting Started With Python Data Functions
 Data functions are defined in data function definition YAML files.  The YAML file contains a description of the
 UI components and input fields to the data function.
 
-Glysde provide a pre-built CPython instance containing `RDKit <https://rdkit.org>`_ and
+Glysade provides a pre-built CPython instance containing `RDKit <https://rdkit.org>`_ and
 `Biopython <https://biopython.org/>`_ modules.  Additionally, an
 `API library <https://github.com/Glysade/DataFxnPylib>`_ is available. This library contains methods to read data
 function requests, construct data function responses, convert columns to and from sequences or molecule, together
@@ -55,7 +55,7 @@ This data function returns a new column containing the exact masses of the molec
        response = DataFunctionResponse(outputColumns=[output_column])
        return response
 
-* Lines 1-4, required imports
+* Lines 1-4. Required imports.
 * Line 7. The data function script must implement an execute method with this signature
 * Line 8. The value of the *structureColumn* input field is extracted from the request using the helper
   method :meth:`~df.data_transfer.string_input_field`. This is the Spotfire columnId of the structure column
@@ -115,7 +115,7 @@ DNA Translation Example
 ***********************
 
 In this example of a biological transform data function, DNA sequences are translated into protein sequences using
-BioPython.
+Biopython.
 
 .. code-block:: python
    :linenos:
@@ -147,7 +147,7 @@ Debugging and Developing Python Data Functions
 **********************************************
 
 If a data function Python script has been created using the *Developer* tab of the *Charts* *Data Function* visual, it
-is relatively simple to debug and code that data function script using `PyCharm <https://www.jetbrains.com/pycharm/>`_
+is relatively simple to debug and code that data function script using `PyCharm <https://www.jetbrains.com/pycharm/>`._
 
 In the final step of the data function development wizard you are prompted to export the data function definition to a folder.
 After doing this, navigate to the folder and run the *pycharm.bat* file.  Assuming you have installed PyCharm, and
@@ -165,10 +165,10 @@ The following files are available in the project:
 #. *in.json*: example data function JSON input data
 #. *main.py*: a script that reads *in.json* calls the data function in *script.py* and writes the result to *out.json*
 #. *test.py*: a unit test template
-#. *command.bat*: a batch file that run *main.py* with the correct environment and Python interpreter.
-   Once in production it is this script that runs the data function
+#. *command.bat*: a batch file that runs *main.py* with the correct environment and Python interpreter.
+   Once in production it is this script that runs the data function.
 
-One the data function is working satisfactorily, to create the required data function YAML, the contents of *script.py*
+Once the data function is working satisfactorily, to create the required data function YAML, the contents of *script.py*
 can be pasted into the script dialog in the *Developer* tab of the *Charts* *Data Function* visual.
 
 Fixing Broken Data Functions

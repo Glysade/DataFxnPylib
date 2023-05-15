@@ -387,6 +387,7 @@ def mol_writer(file: str, type: RDKitFormat = None) -> Union[Chem.SDWriter, Chem
 def mols_to_file(file: str, mols: Iterable[Mol], type: RDKitFormat = None) -> None:
     """
     Writes a list of RDKit molecules to a file
+
     :param file: The name of the file
     :param mols: an Iterator of :class:`rdkit.Chem.rdchem.Mol` RDKit molecules
     :param type:  The structure format for the compounds in the file as :class:`RDKitFormat`.  If None (the default) the type will be inferred from the file name
