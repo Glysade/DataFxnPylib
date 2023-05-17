@@ -459,7 +459,6 @@ class BlastWebSearch(Frozen):
         BlastWebDatabase('nt', False),
         BlastWebDatabase('refseq_select', False),
         BlastWebDatabase('refseq_rna', False),
-        BlastWebDatabase('refseq_representative_genomes', False),
         BlastWebDatabase('est', False),
         BlastWebDatabase('pat', False),
         BlastWebDatabase('gss', False),
