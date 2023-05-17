@@ -448,15 +448,23 @@ class BlastWebSearch(Frozen):
     """
 
     known_databases: List[BlastWebDatabase] = {
-        BlastWebDatabase('envnr', True),
         BlastWebDatabase('nr', True),
+        BlastWebDatabase('refseq_select', True),
+        BlastWebDatabase('refseq_protein', True),
+        BlastWebDatabase('swissprot', True),
         BlastWebDatabase('pataa', True),
         BlastWebDatabase('pdb', True),
-        BlastWebDatabase('env_nt', False),
+        BlastWebDatabase('env_nr', True),
+        BlastWebDatabase('tsa_nr', True),
         BlastWebDatabase('nt', False),
+        BlastWebDatabase('refseq_select', False),
+        BlastWebDatabase('refseq_rna', False),
+        BlastWebDatabase('refseq_representative_genomes', False),
         BlastWebDatabase('est', False),
-        BlastWebDatabase('other_genomic', False),
-        BlastWebDatabase('refseq_genomic', False),
+        BlastWebDatabase('pat', False),
+        BlastWebDatabase('gss', False),
+        BlastWebDatabase('dbsts', False),
+        BlastWebDatabase('env_nt', False)
     }
 
     def __init__(self):
