@@ -504,8 +504,9 @@ class BlastWebSearch(Frozen):
 
         # refseq_select can be specified for either protein or nucleotide searches
         # suffix was added above and in .yaml to differentiate between selections
+        # remove suffix and create appropriate BlastWebDatabase object
         if 'refseq_select' in database.name:
-            database = BlastWebDatabase('refseq', database.protein)
+            database = BlastWebDatabase('refseq_select', database.protein)
 
         if search_type is None:
             target_type = 'prot' if database.protein else 'nucl'
