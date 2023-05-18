@@ -449,7 +449,7 @@ class BlastWebSearch(Frozen):
 
     known_databases: List[BlastWebDatabase] = {
         BlastWebDatabase('nr', True),
-        BlastWebDatabase('refseq_select', True),
+        BlastWebDatabase('refseq_select_prot', True),
         BlastWebDatabase('refseq_protein', True),
         BlastWebDatabase('swissprot', True),
         BlastWebDatabase('pataa', True),
@@ -457,7 +457,7 @@ class BlastWebSearch(Frozen):
         BlastWebDatabase('env_nr', True),
         BlastWebDatabase('tsa_nr', True),
         BlastWebDatabase('nt', False),
-        BlastWebDatabase('refseq_select', False),
+        BlastWebDatabase('refseq_select_nucl', False),
         BlastWebDatabase('refseq_rna', False),
         BlastWebDatabase('est', False),
         BlastWebDatabase('pat', False),
@@ -501,6 +501,12 @@ class BlastWebSearch(Frozen):
         if len(databases) != 1:
             raise ValueError("Unknown web blast database {}".format(database_name))
         database = databases[0]
+
+        # refseq_select can be specified for either protein or nucleotide searches
+        # suffix was added above and in .yaml to differentiate between selections
+        if 'refseq_select' in database.name:
+            database = BlastWebDatabase('refseq', database.protein)
+
         if search_type is None:
             target_type = 'prot' if database.protein else 'nucl'
             search_type = BlastSearchType.default_search_type(query_type, target_type)
