@@ -11,16 +11,16 @@ Utility functions for handling chemical structures using RDKit (www.rdkit.org)
 import base64
 import gzip
 import math
+import re
 from contextlib import contextmanager
 from enum import Enum
 from io import BytesIO, StringIO
 from typing import Iterable, Union, List, Optional
 
 from rdkit import Chem
-from rdkit.Chem import AllChem, RWMol, SanitizeFlags, rdmolops
+from rdkit.Chem import AllChem, RWMol, SanitizeFlags
 from rdkit.Chem.rdChemReactions import ChemicalReaction
-from rdkit.Chem.MolStandardize import rdMolStandardize
-from rdkit.Chem.rdchem import Mol, KekulizeException, AtomValenceException
+from rdkit.Chem.rdchem import Mol, KekulizeException, AtomValenceException, Atom, MolSanitizeException
 from rdkit.Geometry.rdGeometry import Point3D
 
 
@@ -64,17 +64,19 @@ def type_to_format(type: str) -> RDKitFormat:
         raise ValueError("Unknown chemical type {}".format(type))
 
 
-def string_to_mol(type: RDKitFormat, mol_string: str) -> Optional[Union[Mol, ChemicalReaction]]:
+def string_to_mol(type: RDKitFormat, mol_string: str,
+                  do_sanitize_mol: Optional[bool]=True) -> Optional[Union[Mol, ChemicalReaction]]:
     """
     Converts a string to an RDKit molecule
 
     :param type: The structure format for the string as :class:`RDKitFormat`
     :param mol_string: Molecular string
+    :param do_sanitize_mol: whether to run sanitize_mol on the final mol
     :return: RDkit molecule, class :class:`rdkit.Chem.rdchem.Mol`
     """
 
     if type == RDKitFormat.sdf:
-        mol = sdf_to_mol(mol_string)
+        mol = sdf_to_mol(mol_string, do_sanitize_mol)
     elif type == RDKitFormat.pdb:
         mol = Chem.MolFromPDBBlock(mol_string)
     elif type == RDKitFormat.smi:
@@ -134,19 +136,49 @@ def string_to_mols(type: RDKitFormat, mol_string: str) -> List[Mol]:
     return mols
 
 
-def sdf_to_mol(mol_string: str) -> Optional[Mol]:
+def _get_group_number(atom: Atom) -> int:
+    r_group_prop = '_MolFileRLabel'
+    if atom.GetAtomicNum() > 0:
+        return 0
+    if atom.HasProp(r_group_prop):
+        try:
+            r_group_prop = int(atom.GetProp(r_group_prop))
+            if r_group_prop > 0:
+                return r_group_prop
+        except ValueError:
+            pass
+    if atom.GetAtomMapNum() > 0:
+        return atom.GetAtomMapNum()
+    if atom.GetIsotope() > 0:
+        return atom.getIsotope()
+    return 0
+
+
+def _standardize_rgroups(mol: Mol) -> None:
+    for atom in mol.GetAtoms():
+        group_number = _get_group_number(atom)
+        if group_number > 0:
+            atom.SetIsotope(group_number)
+            if not atom.HasQuery():
+                atom.SetAtomMapNum(group_number)
+            atom.SetProp('_MolFileRLabel', str(group_number))
+
+
+def sdf_to_mol(mol_string: str, do_sanitize_mol: Optional[bool]=True) -> Optional[Mol]:
     # if we want SD tags we need to use a supplier as Chem.MolFromMolBlock does not process SD tags
     sdf_in = BytesIO(mol_string.encode('UTF-8'))
     supplier = Chem.ForwardSDMolSupplier(sdf_in, sanitize=False)
     mol = next(supplier)
-    try:
-        sanitize_mol(mol)
-    except Exception as ex:
-        name = type(ex).__name__
-        print('Got exception {} processing sdf input {}'.format(name, mol_string))
-        return None
-    finally:
-        sdf_in.close()
+    if do_sanitize_mol:
+        try:
+            sanitize_mol(mol)
+        except Exception as ex:
+            name = type(ex).__name__
+            print('Got exception {} processing sdf input {}'.format(name, mol_string))
+            return None
+        finally:
+            sdf_in.close()
+    _standardize_rgroups(mol)
     return mol
     # mol = Chem.MolFromMolBlock(mol_string, True, False, False)
 
@@ -164,53 +196,10 @@ def sanitize_mol(mol: Mol) -> None:
         Chem.SanitizeMol(mol, flags)
 
 
-def standardize_mol(mol: Chem.Mol,
-                    normer: Optional[rdMolStandardize.Normalizer] = None,
-                    uncharger: Optional[rdMolStandardize.Uncharger] = None,
-                    metal_disconnector: Optional[rdMolStandardize.MetalDisconnector] = None,
-                    fix_azide: Optional[Chem.Mol] = None) -> Optional[Chem.Mol]:
-    # Use the RDKit standardization routines to put things in a
-    # consistent form.  Returns a standardized copy of the original
-    # mol.
-    # SureChEMBL has some odd azides that the normalizer doesn't touch
-    # and which RDKit objects to.
-    if fix_azide is None:
-        fix_azide = AllChem.ReactionFromSmarts('[N-:1]=[N:2]#[N+:3]>>[N+0:1]#[N+:2][N-:3]')
-    if normer is None:
-        normer = rdMolStandardize.Normalizer()
-    if uncharger is None:
-        uncharger = rdMolStandardize.Uncharger()
-    if metal_disconnector is None:
-        metal_disconnector = rdMolStandardize.MetalDisconnector()
-
-    try:
-        norm_mol = Chem.Mol(mol)
-        prod = fix_azide.RunReactants((norm_mol,))
-        if prod:
-            norm_mol = prod[0][0]
-
-        norm_mol = rdmolops.RemoveHs(norm_mol)
-        norm_mol = normer.normalize(norm_mol)
-        norm_mol = uncharger.uncharge(norm_mol)
-        norm_mol = rdMolStandardize.Reionize(norm_mol)
-        norm_mol = rdMolStandardize.FragmentParent(norm_mol)
-        norm_mol = metal_disconnector.Disconnect(norm_mol)
-        norm_mol = rdMolStandardize.CanonicalTautomer(norm_mol)
-    except (Chem.rdchem.AtomValenceException, Chem.rdchem.KekulizeException,
-            RuntimeError) as err:
-        try:
-            mol_name = mol.GetProp('_Name')
-        except KeyError:
-            mol_name = 'molecule'
-        print(f'Error processing {mol_name} :'
-              f' {Chem.MolToSmiles(mol)}: normalization failed : \n{err}')
-        return None
-
-    sanitize_mol(norm_mol)
-    return norm_mol
-
-
 def smiles_to_mol(smiles: str) -> Optional[Mol]:
+    # convert Chemdraw RGroups to RDKit style
+    if '[R' in smiles:
+        smiles = re.sub(r'\[R(\d+)\]', r'[*:\1]', smiles)
     mol = Chem.MolFromSmiles(smiles)
     try:
         if not mol:
@@ -227,6 +216,7 @@ def smiles_to_mol(smiles: str) -> Optional[Mol]:
                     Chem.SanitizeMol(mol, flags)
             if not mol:
                 print("Failed to convert smiles {} to mol!".format(smiles))
+        _standardize_rgroups(mol)
         return mol
     except Exception as ex:
         name = type(ex).__name__
@@ -244,7 +234,10 @@ def string_to_reaction(rxn_content_type: str, rxn_text: str) -> Optional[Chemica
         elif rxn_content_type in ['chemical/x-mdl-molfile', 'chemical/x-mdl-molfile-v3000', 'chemical/x-mdl-rxnfile']:
             if '$RXN' not in rxn_text:
                 raise ValueError(f'Input is not a RXN block: {rxn_text}')
-            rxn = AllChem.ReactionFromRxnBlock(rxn_text)
+            try:
+                rxn = AllChem.ReactionFromRxnBlock(rxn_text, True)
+            except MolSanitizeException:
+                rxn = AllChem.ReactionFromRxnBlock(rxn_text)
         else:
             raise ValueError(f'Unable to convert content type {rxn_content_type} to reaction')
     except:

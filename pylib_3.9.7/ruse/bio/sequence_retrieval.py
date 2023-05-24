@@ -148,7 +148,7 @@ def retrieve_sequences(usas: List[str], max_sequences: int = 10000, sequence_typ
     args = {'sequence': query, 'outseq': out_file, 'osformat': emboss_format, 'feature': True}
     cline = SeqretFeatureCommandline(**args)
 
-    print("emboss command line is {}".format(cline))
+    # print("emboss command line is {}".format(cline))
     try:
         stdout, stderr = cline()
     except ApplicationError as e:

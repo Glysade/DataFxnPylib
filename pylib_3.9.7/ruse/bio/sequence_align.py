@@ -151,11 +151,16 @@ class MultipleSequenceAlignment(Frozen):
 
         self.aligned_sequences = aligned_sequences
         if len(sequences) > 1:
+            tree_built = False
             if PhyloTreeBuilder.find_fasttree_exe():
-                phylo_tree_builder = PhyloTreeBuilder()
-                self.tree = phylo_tree_builder.build_fasttree_tree(out_file)
-                phylo_tree_builder.cleanup()
-            else:
+                try:
+                    phylo_tree_builder = PhyloTreeBuilder()
+                    self.tree = phylo_tree_builder.build_fasttree_tree(out_file)
+                    phylo_tree_builder.cleanup()
+                    tree_built = True
+                except:
+                    pass
+            if not tree_built and os.path.exists(guide_file):
                 self.tree = Phylo.read(guide_file, "newick")
                 self.tree.ladderize()
 
@@ -167,6 +172,8 @@ class MultipleSequenceAlignment(Frozen):
             distance_lookup = {}
         elif len(self.input_sequences) == 1:
             distance_lookup = {self.input_sequences[0].id: 1.0}
+        elif not self.tree:
+            distance_lookup = {s.id: 1.0 for s in self.input_sequences}
         else:
             tree = PhyloTree(self.tree)
             distance_lookup = tree.leaf_distances(last_distance_only=not PhyloTreeBuilder.find_fasttree_exe())

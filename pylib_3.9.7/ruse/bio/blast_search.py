@@ -93,12 +93,12 @@ class BlastDatabase(Frozen):
         if database_name is None:
             database_name = "{}_{}.db".format(str(uuid.uuid4()), type)
 
-        print("type {} database name {}".format(type, database_name))
+        # print("type {} database name {}".format(type, database_name))
 
         formatdb_exe = full_path_to_blast_exe('makeblastdb')
         args = [formatdb_exe, '-dbtype', type, '-in', fasta_file, '-out', database_name]
-        print("creating blast database {} args {}".format(database_name, args))
-        subprocess.run(args, check=True)
+        # print("creating blast database {} args {}".format(database_name, args))
+        subprocess.run(args, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         os.remove(fasta_file)
 
@@ -305,7 +305,7 @@ class BlastSearch(Frozen):
         args.update(options)
 
         cmd = NcbiblastxCommandline(**args)
-        print("NCBI command line is {}".format(cmd))
+        # print("NCBI command line is {}".format(cmd))
         try:
             cmd()
         except ApplicationError as ex:
@@ -407,8 +407,8 @@ class BlastCreateAndSearch(Frozen):
         self.query_type = query_type
         self.target_type = target_type
 
-        print("Building blast database of {} {} sequences and performing {} search using {} query".
-              format(len(sequences), target_type, search_type, query_type))
+        # print("Building blast database of {} {} sequences and performing {} search using {} query".
+        #      format(len(sequences), target_type, search_type, query_type))
 
         database = BlastDatabase()
         self.database = database
