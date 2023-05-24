@@ -2,7 +2,7 @@ import json
 
 from df.bio_helper import column_to_sequences
 from df.data_transfer import ColumnData, DataFunctionRequest, DataFunctionResponse, DataFunction, string_input_field, \
-    DataType
+    DataType, input_field_to_column
 from ruse.bio.antibody import align_antibody_sequences, ANTIBODY_NUMBERING_COLUMN_PROPERTY
 from ruse.bio.bio_data_table_helper import sequence_to_genbank_base64_str
 
@@ -13,7 +13,7 @@ class AntibodyNumbering(DataFunction):
     """
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
-        input_column = next(iter(request.inputColumns.values()))
+        input_column = input_field_to_column(request, 'sequenceColumn')
         input_column.remove_nulls()
         input_sequences = column_to_sequences(input_column)
         numbering_scheme = string_input_field(request, 'numberingScheme', 'chothia')

@@ -6,7 +6,7 @@ from rdkit.Chem.rdchem import Mol
 
 from df.chem_helper import column_to_molecules, molecules_to_column
 from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResponse, string_input_field, \
-    string_list_input_field, DataType, ColumnData, TableData
+    string_list_input_field, DataType, ColumnData, TableData, input_field_to_column_key, input_field_to_column_keys
 from ruse.rdkit.rdkit_utils import sanitize_mol, string_to_reaction
 
 
@@ -68,16 +68,16 @@ class ReactionTableSearch(DataFunction):
                 chiral_reactant = True
                 break
 
-        structure_column_id = string_input_field(request, 'structureColumn')
+        structure_column_id = input_field_to_column_key(request, 'structureColumn')
         structures = column_to_molecules(request.inputColumns[structure_column_id])
         structure_to_row: Dict[str, int] = {mol_to_smiles(mol): r for r, mol in enumerate(structures) if mol}
-        id_column_id = string_input_field(request, 'idColumn')
+        id_column_id = input_field_to_column_key(request, 'idColumn')
         id_column = request.inputColumns[id_column_id]
         ids: List[Union[str, int]] = id_column.values
-        property_column_ids = string_list_input_field(request, 'propertyColumns')
+        property_column_ids = input_field_to_column_keys(request, 'propertyColumns')
         properties = [request.inputColumns[column_id].values for column_id in property_column_ids]
         property_names = ['_'.join(request.inputColumns[column_id].name.split()) for column_id in property_column_ids]
-        additional_column_ids = string_list_input_field(request, 'additionalColumns')
+        additional_column_ids = input_field_to_column_keys(request, 'additionalColumns')
         if additional_column_ids:
             additional_values = [request.inputColumns[column_id].values for column_id in additional_column_ids]
             additional_names = ['_'.join(request.inputColumns[column_id].name.split()) for column_id in

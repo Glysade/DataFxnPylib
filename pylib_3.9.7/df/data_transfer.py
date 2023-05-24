@@ -94,6 +94,14 @@ class InputField(BaseModel):
     Optional selector type.  For example, the input field may be used to select a column, in which case the 
     data value is the column id.
     """
+    limitBy: Optional[str]
+    """
+    Any Limit By set for an input column.  Available only in Charts version 2.3.0 or later
+    """
+    limitByMarking: Optional[str]
+    """
+    The marking (if any) used by limitBy. Available only in Charts version 2.3.0 or later
+    """
 
 
 class ColumnData(BaseModel):
@@ -126,6 +134,21 @@ class ColumnData(BaseModel):
     missing_null_positions: List[int] = []
     """
     An array to track null values if they have been removed
+    """
+
+    columnId: Optional[str]
+    """
+    The Spotfire input Column Id.  Set for input columns only in Charts version 2.3.0 or later
+    """
+
+    limitBy: Optional[str]
+    """
+    Any Limit By set for an input column.  Available only in Charts version 2.3.0 or later
+    """
+
+    limitByMarking: Optional[str]
+    """
+    The marking (if any) used by limitBy. Available only in Charts version 2.3.0 or later
     """
 
     # TODO: maybe just use column data as transfer object move this functionality to another class or utility functions
@@ -179,7 +202,7 @@ class DataFunctionRequest(BaseModel):
     """
     inputColumns: Dict[str, ColumnData] = []
     """
-    Input columns in the request.  This dictionary is keyed by column id.
+    Input columns in the request.  This dictionary is keyed by column id and limit by.
     """
     inputFields: Dict[str, InputField] = {}
     """
@@ -347,3 +370,72 @@ def string_list_input_field(request: DataFunctionRequest, field: str, default_va
         return default_value
     _check_data_type(request, field, DataType.STRING_LIST)
     return data
+
+
+def _columnLookupKey(input_field: InputField, column_id: str) -> str:
+    if not input_field.limitBy:
+        return column_id
+    key = column_id + '_' + input_field.limitBy
+    if input_field.limitByMarking:
+        key = key +"_" + input_field.limitByMarking
+    return key
+
+
+def input_field_to_column_key(request: DataFunctionRequest, field: str) -> Optional[str]:
+    """
+    A helper method for retrieving the data column lookup key corresponding to a string input field that is a single column selector
+
+    @param request: the request
+    @param field: the input field
+    @return: the lookup key
+    """
+    column_id = string_input_field(request, field)
+    if not column_id:
+        return None
+    key = _columnLookupKey(request.inputFields[field], column_id)
+    return key
+
+
+def input_field_to_column_keys(request: DataFunctionRequest, field: str) -> Optional[List[str]]:
+    """
+    A helper method for retrieving the data columns lookup keys corresponding to a string input field that selects multiple columns
+
+    @param request: the request
+    @param field: the input field
+    @return: the lookup keys
+    """
+    column_ids = string_list_input_field(request, field)
+    if not column_ids:
+        return None
+    keys = [_columnLookupKey(request.inputFields[field], column_id) for column_id in column_ids]
+    return keys
+
+
+def input_field_to_column(request: DataFunctionRequest, field: str) -> Optional[ColumnData]:
+    """
+    A helper method for retrieving the data column corresponding to a string input field that is a single column selector
+
+    @param request: the request
+    @param field: the input field
+    @return: the column
+    """
+    key = input_field_to_column_key(request, field)
+    if not key:
+        return None
+    column = request.inputColumns[key]
+    return column
+
+
+def input_field_to_columns(request: DataFunctionRequest, field: str) -> Optional[List[ColumnData]]:
+    """
+    A helper method for retrieving the data columns corresponding to a string input field that selects multiple columns
+
+    @param request: the request
+    @param field: the input field
+    @return: the columns
+    """
+    keys = input_field_to_column_keys(request, field)
+    if not keys:
+        return None
+    columns = [request.inputColumns[key] for key in keys]
+    return columns
