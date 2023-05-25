@@ -6,7 +6,7 @@ from df.chem_helper import column_to_molecules, molecules_to_column
 from df.data_transfer import (DataFunction, DataFunctionRequest,
                               DataFunctionResponse, ColumnData, DataType,
                               TableData, boolean_input_field,
-                              integer_input_field, string_input_field)
+                              integer_input_field, string_input_field, input_field_to_column)
 from rdkit import Chem
 
 from df.replace_bioisostere_linkers import replace_linkers
@@ -63,8 +63,9 @@ class LinkerReplacements(DataFunction):
         super().__init__()
 
     def extract_input_data(self, request: DataFunctionRequest) -> None:
-        column_id = string_input_field(request, 'structureColumn')
-        structure_column = request.inputColumns[column_id]
+        #column_id = input_field_to_column_key(request, 'structureColumn')
+        #structure_column = request.inputColumns[column_id]
+        structure_column = input_field_to_column(request, 'structureColumn')
         self._parent_mols = column_to_molecules(structure_column)
         self._plus_delta_bonds = integer_input_field(request,
                                                      'plusDeltaBonds')
@@ -74,8 +75,9 @@ class LinkerReplacements(DataFunction):
         self._no_ring_linkers = boolean_input_field(request, 'noRingLinkers')
         self._max_mols_per_input = integer_input_field(request,
                                                        'maxMolsPerInput')
-        column_id = string_input_field(request, 'idColumn')
-        id_column = request.inputColumns[column_id]
+        #column_id = input_field_to_column_key(request, 'idColumn')
+        #id_column = request.inputColumns[column_id]
+        id_column = input_field_to_column(request, 'idColumn')
         self._parent_ids = id_column.values
         self._ids_type = id_column.dataType
 
