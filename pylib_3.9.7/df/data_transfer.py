@@ -182,6 +182,32 @@ class ColumnData(BaseModel):
         self.missing_null_positions = []
 
 
+class DataFunctionDocumentProperty(BaseModel):
+    """
+    A document property to be added to or edited in the current Spotfire document
+    """
+
+    name: str
+    """
+    The name of the document property
+    """
+
+    dataType: DataType
+    """
+    The data type stored in the property
+    """
+
+    description: Optional[str]
+    """
+    An optional description for the property
+    """
+
+    value: Any
+    """
+    The value of the document property
+    """
+
+
 class TableData(BaseModel):
     """
     Model class for Spotfire data table.  Instantiate this to return a new table from a data function
@@ -233,9 +259,15 @@ class DataFunctionResponse(BaseModel):
     """
     An array of output columns (to be added to the data function's input table)
     """
+
     outputTables: List[TableData] = []
     """
     An array of output tables
+    """
+
+    documentProperties: List[DataFunctionDocumentProperty] = []
+    """
+    An array of document properties
     """
 
 
