@@ -143,6 +143,26 @@ Biopython.
 * Line 11. Create an output column for the protein sequences using the helper function
   :meth:`~df.bio_helper.sequences_to_column`
 
+Updating Document Properties
+****************************
+
+In addition to adding columns to the input data table or creating data tables, data functions my update
+document properties. For example:
+
+.. code-block:: python
+   :linenos:
+
+      properties = [
+        DataFunctionDocumentProperty(name='strProperty', description='A string property', dataType=DataType.STRING, value='Hello world 2'),
+        DataFunctionDocumentProperty(name='boolProperty', description='A boolean property', dataType=DataType.BOOLEAN, value=True),
+        DataFunctionDocumentProperty(name='intProperty', description='An integer property', dataType=DataType.INTEGER, value=100),
+        DataFunctionDocumentProperty(name='doubleProperty', dataType=DataType.DOUBLE, value=1.234)
+      ]
+      response = DataFunctionResponse(outputColumns=[output_column], documentProperties=properties)
+
+Each document property is specified using a :class:`~df.data_transfer.DataFunctionDocumentProperty` class and returned as an
+array in the data function response.
+
 Debugging and Developing Python Data Functions
 **********************************************
 
