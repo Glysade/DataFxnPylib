@@ -146,7 +146,7 @@ Biopython.
 Updating Document Properties
 ****************************
 
-In addition to adding columns to the input data table or creating data tables, data functions my update
+In addition to adding columns to the input data table or creating data tables, data functions may update or create
 document properties. For example:
 
 .. code-block:: python
