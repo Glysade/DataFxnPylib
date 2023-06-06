@@ -146,7 +146,8 @@ Biopython.
 Updating Document Properties
 ****************************
 
-In addition to adding columns to the input data table or creating data tables, data functions may update or create
+In Chemcharts version 4.3.0 or later, in addition to adding columns to the input data table or creating data tables,
+data functions may update or create
 document properties. For example:
 
 .. code-block:: python
@@ -167,7 +168,7 @@ Debugging and Developing Python Data Functions
 **********************************************
 
 If a data function Python script has been created using the *Developer* tab of the *Charts* *Data Function* visual, it
-is relatively simple to debug and code that data function script using `PyCharm <https://www.jetbrains.com/pycharm/>`._
+is relatively simple to debug and code that data function script using `PyCharm <https://www.jetbrains.com/pycharm/>`_.
 
 In the final step of the data function development wizard you are prompted to export the data function definition to a folder.
 After doing this, navigate to the folder and run the *pycharm.bat* file.  Assuming you have installed PyCharm, and
@@ -190,6 +191,12 @@ The following files are available in the project:
 
 Once the data function is working satisfactorily, to create the required data function YAML, the contents of *script.py*
 can be pasted into the script dialog in the *Developer* tab of the *Charts* *Data Function* visual.
+
+In Chemcharts version 4.3.0 or later `Visual Studio Code <https://code.visualstudio.com/docs/languages/python>`_ workspace
+configuration files are are added to the output folder.  Simply open the folder from within Visual Studio Code.  The
+*Python*, *Pylance* and *YAML* extensions should be present.  The workspace will be configured with the default Python
+interpreter set to Glysade CPython distribution; a *.env* file will export the correct environment to Python; the unit
+testing and debugging views are correctly configured.
 
 Fixing Broken Data Functions
 ****************************
