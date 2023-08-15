@@ -65,6 +65,7 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest, o
     bits = []
     query_sequences = []
     target_sequences = []
+    uris = []
     multiple_alignments = []
     if show_multiple_alignments:
         alignments.append(None)
@@ -77,6 +78,7 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest, o
         bits.append(None)
         query_sequences.append(None)
         target_sequences.append(None)
+        uris.append(None)
 
     if sequences:
         for query_sequence, query_result in zip(sequences, results.query_hits):
@@ -101,8 +103,19 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest, o
                 query_sequences.append(query_seq_str)
                 target_sequences.append(hit_seq_str)
 
+                if 'pdbaa' in database_name:
+                    parts = hit.target_id.split('|')
+                    if len(parts) == 5 and parts[2] == 'pdb':
+                        uri = 'https://files.rcsb.org/download/%s.pdb' % parts[3]
+                    elif len(parts) == 3 and parts[0] == 'pdb':
+                        uri = 'https://files.rcsb.org/download/%s.pdb' % parts[1]
+                    else:
+                        uri = None
+                    uris.append(uri)
+
             if show_multiple_alignments:
                 multiple_alignments = build_common_alignments(query_sequence, query_result.hits)
+
 
     sequence_data_type = DataType.BINARY if genbank else DataType.STRING
     aligned_sequences_column = ColumnData(name='Aligned Sequence Pairs', dataType=DataType.STRING,
@@ -126,6 +139,12 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest, o
                e_value_column, score_column, bit_column,
                query_sequence_column,
                target_sequence_column]
+
+    if 'pdbaa' in database_name:
+        uri_column = ColumnData(name='URL', dataType=DataType.STRING, contentType='chemical/x-uri',
+                                properties={'Dimension': '1'}, values=uris)
+        columns.append(uri_column)
+
     if show_query_id:
         columns.insert(3, query_definition_column)
         columns.insert(3, query_id_column)
