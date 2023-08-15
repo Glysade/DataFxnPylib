@@ -170,5 +170,4 @@ class BlastLocalTextSearch(DataFunction):
         query_sequence = query_from_request(request)
         blastdb = string_input_field(request, 'blastDbPath')
         os.environ['BLASTDB'] = blastdb
-        return run_blast_search([query_sequence], request, 'Blast text search results',
-                                sequence_column_type = 'chemical/x-genbank')
+        return run_blast_search([query_sequence], request, 'Blast text search results')
