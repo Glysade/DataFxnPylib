@@ -184,7 +184,8 @@ class ColumnData(BaseModel):
 
 class DataFunctionDocumentProperty(BaseModel):
     """
-    A document property to be added to or edited in the current Spotfire document
+    A Spotfire document property.  Either an existing property in the request, or a property in the reponse to be
+    added or updated.
     """
 
     name: str
@@ -249,6 +250,10 @@ class DataFunctionRequest(BaseModel):
     """
     An optional Python script that contains code to execute the data function.
     """
+    documentProperties: List[DataFunctionDocumentProperty] = []
+    """
+    An array of the current document properties
+    """
 
 
 class DataFunctionResponse(BaseModel):
@@ -267,7 +272,7 @@ class DataFunctionResponse(BaseModel):
 
     documentProperties: List[DataFunctionDocumentProperty] = []
     """
-    An array of document properties
+    An array of document properties (to add or update the current document properties)
     """
 
 
@@ -275,6 +280,7 @@ class DataFunction(ABC):
     """
     Base class to be used when defining builtin data function classes that are run from their module files
     """
+
     @abstractmethod
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         """
@@ -409,7 +415,7 @@ def _columnLookupKey(input_field: InputField, column_id: str) -> str:
         return column_id
     key = column_id + '_' + input_field.limitBy
     if input_field.limitByMarking:
-        key = key +"_" + input_field.limitByMarking
+        key = key + "_" + input_field.limitByMarking
     return key
 
 
