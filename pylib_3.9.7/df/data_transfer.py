@@ -184,7 +184,8 @@ class ColumnData(BaseModel):
 
 class DataFunctionDocumentProperty(BaseModel):
     """
-    A document property to be added to or edited in the current Spotfire document
+    A Spotfire document property.  Either an existing property in the request, or a property in the reponse to be
+    added or updated.
     """
 
     name: str

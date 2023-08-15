@@ -143,12 +143,38 @@ Biopython.
 * Line 11. Create an output column for the protein sequences using the helper function
   :meth:`~df.bio_helper.sequences_to_column`
 
+Document Properties
+*******************
+
+A document property is specified using a :class:`~df.data_transfer.DataFunctionDocumentProperty` class.
+
+Reading Input Document Properties
++++++++++++++++++++++++++++++++++
+
+In Chemcharts version 4.3.0.17 or document properties are included in the JSON passed to the data function and may be
+accessed through the list attribute :attr:`~df.data_transfer.DataFunctionRequest.documentProperties` in the request.
+Only string, integer, double and boolean properties are transferred. List properties are not passed.
+For example, this data function reads all string document properties and outputs them in a new data table.
+
+.. code-block:: python
+
+  from df.data_transfer import DataFunctionRequest, DataFunctionResponse, DataType, ColumnData, \
+      TableData
+
+  def execute(request: DataFunctionRequest) -> DataFunctionResponse:
+      input_properties = request.documentProperties
+      string_properties = [(p.name, p.value) for p in input_properties if p.dataType == DataType.STRING]
+      names, values = tuple(zip(*string_properties))
+      columns = [ColumnData(name='Property Name', dataType=DataType.STRING, values=list(names)),
+                ColumnData(name='Property Value', dataType=DataType.STRING, values=list(values))]
+      response = DataFunctionResponse(outputTables=[TableData(tableName='StringDocProperties', columns=columns)])
+      return response
+
 Updating Document Properties
-****************************
+++++++++++++++++++++++++++++
 
 In Chemcharts version 4.3.0 or later, in addition to adding columns to the input data table or creating data tables,
-data functions may update or create
-document properties. For example:
+data functions may update or create document properties. For example:
 
 .. code-block:: python
    :linenos:
@@ -161,8 +187,8 @@ document properties. For example:
       ]
       response = DataFunctionResponse(outputColumns=[output_column], documentProperties=properties)
 
-Each document property is specified using a :class:`~df.data_transfer.DataFunctionDocumentProperty` class and returned as an
-array in the data function response.
+Document properties are added or updated by setting the list
+attribute :attr:`~df.data_transfer.DataFunctionResponse.documentProperties` in the response.
 
 Debugging and Developing Python Data Functions
 **********************************************
@@ -196,7 +222,9 @@ In Chemcharts version 4.3.0 or later `Visual Studio Code <https://code.visualstu
 configuration files are are added to the output folder.  Simply open the folder from within Visual Studio Code.  The
 *Python*, *Pylance* and *YAML* extensions should be present.  The workspace will be configured with the default Python
 interpreter set to Glysade CPython distribution; a *.env* file will export the correct environment to Python; the unit
-testing and debugging views are correctly configured.
+testing and debugging views are correctly configured. Before running or debugging you may need to
+run *Python: Select Interpreter* command as select the default data function interpreter over the recommended
+system interpreter.
 
 Fixing Broken Data Functions
 ****************************
