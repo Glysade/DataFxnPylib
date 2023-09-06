@@ -214,9 +214,13 @@ class DataFunctionResponse(BaseModel):
     """
     An array of output tables
     """
-    notificationMessage: str = ''
+    notificationMessage: dict = None
     """
-    A string to hold a message sent at the end of Data Function operation as a notification
+    A dictionary to hold a message sent at the end of Data Function operation as a notification
+    If None is passed, no notification is given.
+    If a notification is passed,
+        'title' and 'summary' keys are used as a title and summary of the notification box in Spotfire
+        If 'title' or 'summary' is empty or None, no notification will be given.
     """
 
 class DataFunction(ABC):
