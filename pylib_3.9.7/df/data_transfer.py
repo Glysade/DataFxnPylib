@@ -214,7 +214,7 @@ class DataFunctionResponse(BaseModel):
     """
     An array of output tables
     """
-    notificationMessage: str = None
+    notificationMessage: str = ''
     """
     A string to hold a message sent at the end of Data Function operation as a notification
     """
