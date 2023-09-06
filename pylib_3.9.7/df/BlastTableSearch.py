@@ -71,5 +71,8 @@ class BlastTableSearch(DataFunction):
             multiple_alignment_column = sequences_to_column(multiple_alignments[1:], 'Aligned Sequence', True)
             multiple_alignment_column.insert_nulls(null_positions)
             columns.append(multiple_alignment_column)
-        response = DataFunctionResponse(outputColumns=columns)
+
+        response = DataFunctionResponse(outputColumns = columns,
+                                        notificationMessage = '!! Notification !!')
+
         return response
