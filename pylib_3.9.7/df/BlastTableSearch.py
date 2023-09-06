@@ -72,7 +72,11 @@ class BlastTableSearch(DataFunction):
             multiple_alignment_column.insert_nulls(null_positions)
             columns.append(multiple_alignment_column)
 
+        notification = ''
+        if len(e_values) == 0 and len(scores) == 0 and len(bits) == 0:
+            notification = 'NOTE: No hits found'
+
         response = DataFunctionResponse(outputColumns = columns,
-                                        notificationMessage = '!! Notification !!')
+                                        notificationMessage = notification)
 
         return response
