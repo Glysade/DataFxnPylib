@@ -142,7 +142,7 @@ def run_blast_search(sequences: List[SeqRecord], request: DataFunctionRequest, o
 
     if 'pdbaa' in database_name:
         uri_column = ColumnData(name='URL', dataType=DataType.STRING, contentType='chemical/x-uri',
-                                properties={'Dimension': '1'}, values=uris)
+                                properties={'Dimension': '3'}, values=uris)
         columns.append(uri_column)
 
     if show_query_id:
