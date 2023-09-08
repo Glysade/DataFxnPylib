@@ -82,7 +82,6 @@ class BlastTableSearch(DataFunction):
                                               details = 'The search did not return results for any query sequence. ' +
                                                         'The resulting data columns will not contain any values. ' +
                                                         'This is expected behavior when no hits are found for any query.'))
-
         response = DataFunctionResponse(outputColumns = columns,
                                         notifications = notifications)
 
