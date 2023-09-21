@@ -31,10 +31,10 @@ def column_to_sequences(column: ColumnData, id_column: Optional[ColumnData] = No
     """
     content_type = column.contentType
     if content_type == 'chemical/x-sequence':
-        sequences = [string_to_sequence(s, index) if s else None for (index, s) in
+        sequences = [string_to_sequence(s.strip().replace(' ', ''), index) if s else None for (index, s) in
                      enumerate(column.values)]
     elif content_type == 'chemical/x-genbank':
-        sequences = [genbank_base64_str_to_sequence(s, index) if s else None for (index, s) in
+        sequences = [genbank_base64_str_to_sequence(s.strip().replace(' ', ''), index) if s else None for (index, s) in
                      enumerate(column.values)]
     else:
         raise ValueError(f'Unable to process content type {content_type}')
@@ -87,11 +87,12 @@ def query_from_request(request: DataFunctionRequest, input_field_name: str = 'qu
             with StringIO(query) as fh:
                 sequence = SeqIO.read(fh, fmt)
             if sequence:
+                sequence.seq = sequence.seq.strip().replace(' ', '')
                 break
         except ValueError:
             pass
     if not sequence:
-        query = ''.join(query.split()).upper()
+        query = ''.join(query.split()).upper().strip()
         sequence = SeqRecord(Seq(query), 'Query')
 
     return sequence
