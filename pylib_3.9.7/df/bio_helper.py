@@ -31,10 +31,11 @@ def column_to_sequences(column: ColumnData, id_column: Optional[ColumnData] = No
     """
     content_type = column.contentType
     if content_type == 'chemical/x-sequence':
-        sequences = [string_to_sequence(s.strip().replace(' ', ''), index) if s else None for (index, s) in
+        # "".join(s.split()) removes all whitespace from a string
+        sequences = [string_to_sequence("".join(s.split()), index) if s else None for (index, s) in
                      enumerate(column.values)]
     elif content_type == 'chemical/x-genbank':
-        sequences = [genbank_base64_str_to_sequence(s.strip().replace(' ', ''), index) if s else None for (index, s) in
+        sequences = [genbank_base64_str_to_sequence("".join(s.split()), index) if s else None for (index, s) in
                      enumerate(column.values)]
     else:
         raise ValueError(f'Unable to process content type {content_type}')
