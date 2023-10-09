@@ -15,18 +15,17 @@ class AntibodyStructurePrediction(DataFunction):
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
 
-        def execute(request: DataFunctionRequest) -> DataFunctionResponse:
-            predictor = ABodyBuilder2()
+        predictor = ABodyBuilder2()
 
-            output_file = "c:\Temp\my_antibody.pdb"
-            sequences = {
-                'H': 'EVQLVESGGGVVQPGGSLRLSCAASGFTFNSYGMHWVRQAPGKGLEWVAFIRYDGGNKYYADSVKGRFTISRDNSKNTLYLQMKSLRAEDTAVYYCANLKDSRYSGSYYDYWGQGTLVTVS',
-                'L': 'VIWMTQSPSSLSASVGDRVTITCQASQDIRFYLNWYQQKPGKAPKLLISDASNMETGVPSRFSGSGSGTDFTFTISSLQPEDIATYYCQQYDNLPFTFGPGTKVDFK'}
+        output_file = "c:\Temp\my_antibody.pdb"
+        sequences = {
+            'H': 'EVQLVESGGGVVQPGGSLRLSCAASGFTFNSYGMHWVRQAPGKGLEWVAFIRYDGGNKYYADSVKGRFTISRDNSKNTLYLQMKSLRAEDTAVYYCANLKDSRYSGSYYDYWGQGTLVTVS',
+            'L': 'VIWMTQSPSSLSASVGDRVTITCQASQDIRFYLNWYQQKPGKAPKLLISDASNMETGVPSRFSGSGSGTDFTFTISSLQPEDIATYYCQQYDNLPFTFGPGTKVDFK'}
 
-            antibody = predictor.predict(sequences)
-            antibody.save(output_file)
+        antibody = predictor.predict(sequences)
+        antibody.save(output_file)
 
-            return (DataFunctionResponse(outputColumns=[]))
+        return DataFunctionResponse(outputColumns=[])
 
         # input_column = input_field_to_column(request, 'sequenceColumn')
         # input_column.remove_nulls()
