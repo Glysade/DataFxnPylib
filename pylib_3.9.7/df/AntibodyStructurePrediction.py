@@ -35,6 +35,7 @@ class AntibodyStructurePrediction(DataFunction):
                 antibody.save(filename)
 
         output_column = ColumnData(name = 'Structure Files', dataType = DataType.STRING,
-                                   contentType = 'chemical/x-uri', values = filenames)
+                                   contentType = 'chemical/x-uri', values = filenames,
+                                   properties = {'Dimension': '3'})
 
         return DataFunctionResponse(outputColumns = [output_column])
