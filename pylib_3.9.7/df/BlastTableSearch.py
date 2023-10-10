@@ -1,6 +1,6 @@
 from df.bio_helper import column_to_sequences, query_from_request, sequences_to_column
 from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResponse, ColumnData, \
-    DataType, boolean_input_field
+    DataType, boolean_input_field, Notification, NotificationLevel
 from ruse.bio.blast_parse import BlastResults, build_common_alignments
 from ruse.bio.blast_search import BlastCreateAndSearch
 
@@ -13,6 +13,7 @@ class BlastTableSearch(DataFunction):
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
         options = {}
         args = {}
+        notifications = []  # store notification for user in this list using .append(Notification(...))
 
         query = query_from_request(request)
         show_multiple_alignments = boolean_input_field(request, 'showMultipleAlignments', False)
@@ -71,5 +72,17 @@ class BlastTableSearch(DataFunction):
             multiple_alignment_column = sequences_to_column(multiple_alignments[1:], 'Aligned Sequence', True)
             multiple_alignment_column.insert_nulls(null_positions)
             columns.append(multiple_alignment_column)
-        response = DataFunctionResponse(outputColumns=columns)
+
+        if e_values.count(None) == len(e_values) and \
+           scores.count(None) == len(scores) and \
+           bits.count(None) == len(bits):
+            notifications.append(Notification(level = NotificationLevel.INFORMATION,
+                                              title = 'BLAST Table Search',
+                                              summary = 'No hits identified in search. Data columns will be empty.',
+                                              details = 'The search did not return results for any query sequence. ' +
+                                                        'The resulting data columns will not contain any values. ' +
+                                                        'This is expected behavior when no hits are found for any query.'))
+        response = DataFunctionResponse(outputColumns = columns,
+                                        notifications = notifications)
+
         return response
