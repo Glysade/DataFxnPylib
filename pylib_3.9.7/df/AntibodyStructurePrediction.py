@@ -1,10 +1,9 @@
 import json
+import os
 
 from df.bio_helper import column_to_sequences
 from df.data_transfer import ColumnData, DataFunctionRequest, DataFunctionResponse, DataFunction, string_input_field, \
     DataType, input_field_to_column
-from ruse.bio.antibody import align_antibody_sequences, ANTIBODY_NUMBERING_COLUMN_PROPERTY
-from ruse.bio.bio_data_table_helper import sequence_to_genbank_base64_str
 
 from ImmuneBuilder import ABodyBuilder2
 
@@ -17,38 +16,25 @@ class AntibodyStructurePrediction(DataFunction):
 
         predictor = ABodyBuilder2()
 
-        output_file = "c:\Temp\my_antibody.pdb"
-        sequences = {
-            'H': 'EVQLVESGGGVVQPGGSLRLSCAASGFTFNSYGMHWVRQAPGKGLEWVAFIRYDGGNKYYADSVKGRFTISRDNSKNTLYLQMKSLRAEDTAVYYCANLKDSRYSGSYYDYWGQGTLVTVS',
-            'L': 'VIWMTQSPSSLSASVGDRVTITCQASQDIRFYLNWYQQKPGKAPKLLISDASNMETGVPSRFSGSGSGTDFTFTISSLQPEDIATYYCQQYDNLPFTFGPGTKVDFK'}
+        light_chains = column_to_sequences(input_field_to_column(request, 'lightChain'))
+        heavy_chains = column_to_sequences(input_field_to_column(request, 'heavyChain'))
+        ids = input_field_to_column(request, 'idColumn').values
+        output_dir = string_input_field(request, 'outputDirectory')
 
-        antibody = predictor.predict(sequences)
-        antibody.save(output_file)
+        filenames = []
 
-        return DataFunctionResponse(outputColumns=[])
+        for light, heavy, id in zip(light_chains, heavy_chains, ids):
+            if light is None or heavy is None:
+                filenames.append(None)
+            else:
+                sequences = {'H': str(heavy.seq).upper(), 'L': str(light.seq).upper()}
+                antibody = predictor.predict(sequences)
 
-        # input_column = input_field_to_column(request, 'sequenceColumn')
-        # input_column.remove_nulls()
-        # input_sequences = column_to_sequences(input_column)
-        # numbering_scheme = string_input_field(request, 'numberingScheme', 'chothia')
-        # cdr_definition = string_input_field(request, 'cdrDefinition', 'chothia')
-        # if not cdr_definition:
-        #     if numbering_scheme == 'imgt':
-        #         cdr_definition = 'imgt'
-        #     elif numbering_scheme == 'kabat':
-        #         cdr_definition = 'kabat'
-        #     else:
-        #         cdr_definition = 'chothia'
+                filename = os.path.join(output_dir, '_'.join([id, 'predicted.pdb']))
+                filenames.append(filename)
+                antibody.save(filename)
 
-        # align_information = align_antibody_sequences(input_sequences, numbering_scheme, cdr_definition)
-        # output_sequences = align_information.aligned_sequences
-        # numbering_json = align_information.to_column_json()
+        output_column = ColumnData(name = 'Structure Files', dataType = DataType.STRING,
+                                   contentType = 'chemical/x-uri', values = filenames)
 
-        # rows = [sequence_to_genbank_base64_str(s) for s in output_sequences]
-        # properties = {ANTIBODY_NUMBERING_COLUMN_PROPERTY: numbering_json}
-
-        # output_column = ColumnData(name='Aligned Sequence', dataType=DataType.BINARY, properties=properties,
-        #                            contentType='chemical/x-genbank', values=rows)
-        # output_column.insert_nulls(input_column.missing_null_positions)
-        # response = DataFunctionResponse(outputColumns=[output_column])
-        # return response
+        return DataFunctionResponse(outputColumns = [output_column])
