@@ -1,4 +1,3 @@
-import json
 import os
 
 from df.bio_helper import column_to_sequences
