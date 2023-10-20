@@ -31,6 +31,10 @@ class BlastLocalColumnSearch(DataFunction):
         blastdb = string_input_field(request, 'blastDbPath')
         os.environ['BLASTDB'] = blastdb
 
-        return run_blast_search(input_sequences, request, 'Blast column search results',
+        response = run_blast_search(input_sequences, request, 'Blast column search results',
                                 sequence_column.contentType,
                                 True)
+
+         # raise Exception(response.outputTables[0].columns[1].values)
+
+        return response
