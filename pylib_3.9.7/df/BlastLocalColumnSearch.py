@@ -23,6 +23,12 @@ class BlastLocalColumnSearch(DataFunction):
         sequence_column = request.inputColumns[sequence_column_id]
 
         id_column_id = string_input_field(request, 'idColumn')
+
+        if id_column_id is not None:
+            for column_id in request.inputColumns.keys():
+                if id_column_id in column_id:
+                    id_column_id = column_id
+
         id_column = None if id_column_id is None else request.inputColumns[id_column_id]
 
         input_sequences = column_to_sequences(sequence_column, id_column)
