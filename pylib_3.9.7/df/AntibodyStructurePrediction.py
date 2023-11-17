@@ -55,8 +55,6 @@ class AntibodyStructurePrediction(DataFunction):
         else:
             row_multiplier = 1
 
-        seed = integer_input_field(request, 'uiRandomSeed')
-
         do_numbering = boolean_input_field(request, 'uiDoNumbering')
         num_scheme = string_input_field(request, 'uiNumberingScheme')
         cdr_def= string_input_field(request, 'uiCDRdef')
@@ -104,10 +102,10 @@ class AntibodyStructurePrediction(DataFunction):
                                      os.path.join(dirname, f'{ab_id}_model{idx + 1}_rank{rank + 1}_refined.pdb')
                                      for idx, rank in enumerate(antibody.ranking)])
 
-               antibody.save_all(dirname, best_filename, filename_prefix = ab_id, refine_all = refine_all, seed = seed)
+               antibody.save_all(dirname, best_filename, filename_prefix = ab_id, refine_all = refine_all)
            else:
                filenames.append(os.path.join(output_dir, best_filename))
-               antibody.save(filenames[-1], seed = seed)
+               antibody.save(filenames[-1])
 
         # antibody numbering or not
         if do_numbering:
