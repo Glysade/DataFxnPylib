@@ -1,4 +1,6 @@
+import base64
 import os
+import gzip
 from typing import Optional
 
 from Bio.SeqRecord import SeqRecord
@@ -70,6 +72,7 @@ class AntibodyStructurePrediction(DataFunction):
         HL_concat_seq = []
         heavy_chain_seq = []
         light_chain_seq = []
+        embedded_structures = []
 
         for ab_seq, ab_id in zip(ab_sequences, ab_ids):
            ids.extend([ab_id] * row_multiplier)
@@ -104,6 +107,13 @@ class AntibodyStructurePrediction(DataFunction):
                filenames.append(os.path.join(output_dir, best_filename))
                antibody.save(filenames[-1])
 
+            # open the file, compress, and encode it
+           with open(filenames[-1], 'r', encoding = 'utf-8') as pdb_file:
+               pdb_data = pdb_file.read()
+               pdb_zip = gzip.compress(pdb_data.encode())
+               pdb_enc = base64.b64encode(pdb_zip).decode('utf8')
+               embedded_structures.append(pdb_enc)
+
         # antibody numbering or not
         if do_numbering:
             HL_chain_values, HL_chain_props = self._antibody_numbering([string_to_sequence(s, index)
@@ -122,6 +132,9 @@ class AntibodyStructurePrediction(DataFunction):
                    ColumnData(name = 'Structure Files', dataType = DataType.STRING,
                               contentType = 'chemical/x-uri', values = filenames,
                               properties = {'Dimension': '3'}),
+                   ColumnData(name = 'Compressed Structures', dataType = DataType.BINARY,
+                              contentType = 'chemical/x-pdb', values = embedded_structures,
+                              properties={'Dimension': '3'}),
                    ColumnData(name = 'Concatenated Chains (Heavy + Light)', dataType = HL_chain_data_type,
                               contentType = HL_chain_content_type, values = HL_chain_values, properties = HL_chain_props),
                    ColumnData(name = 'Original Sequence', dataType = DataType.STRING,
