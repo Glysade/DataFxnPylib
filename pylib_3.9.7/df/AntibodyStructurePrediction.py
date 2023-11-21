@@ -37,9 +37,6 @@ class AntibodyStructurePrediction(DataFunction):
 
         return (rows, properties)
 
-        # return ColumnData(name = 'Aligned Sequence', dataType = DataType.BINARY, properties = properties,
-        #                   contentType = 'chemical/x-genbank', values = rows)
-
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
 
         sequence_column = input_field_to_column(request, 'uiAbSeqCol')
@@ -90,8 +87,8 @@ class AntibodyStructurePrediction(DataFunction):
            best_filename = '_'.join([ab_id, 'predicted.pdb'])
 
            if save_all:
-               model_number.extend([f'Model #{idx + 1}' for idx in range(row_multiplier)])
-               model_rank.extend([f'Rank #{idx + 1}' for idx in antibody.ranking])
+               model_number.extend([idx + 1 for idx in range(row_multiplier)])
+               model_rank.extend([idx + 1 for idx in antibody.ranking])
                dirname = os.path.join(output_dir, ab_id)
                if refine_all:
                    filenames.extend([os.path.join(dirname, f'{ab_id}_model{idx + 1}_rank{rank + 1}_refined.pdb')
@@ -127,17 +124,17 @@ class AntibodyStructurePrediction(DataFunction):
                               properties = {'Dimension': '3'}),
                    ColumnData(name = 'Concatenated Chains (Heavy + Light)', dataType = HL_chain_data_type,
                               contentType = HL_chain_content_type, values = HL_chain_values, properties = HL_chain_props),
+                   ColumnData(name = 'Original Sequence', dataType = DataType.STRING,
+                              contentType='chemical/x-sequence', values = orig_seq)]
                    ColumnData(name = 'Heavy Chain', dataType = DataType.STRING,
                               contentType = 'chemical/x-sequence', values = heavy_chain_seq),
                    ColumnData(name = 'Light Chain', dataType = DataType.STRING,
                               contentType = 'chemical/x-sequence', values = light_chain_seq),
-                   ColumnData(name = 'Original Sequence', dataType = DataType.STRING,
-                              contentType='chemical/x-sequence', values = orig_seq)]
 
         if save_all:
-            columns[1:1] = [ColumnData(name = 'Model Number', dataType = DataType.STRING,
+            columns[1:1] = [ColumnData(name = 'Model Number', dataType = DataType.INTEGER,
                                        values = model_number),
-                            ColumnData(name = 'Model Rank', dataType = DataType.STRING,
+                            ColumnData(name = 'Model Rank', dataType = DataType.INTEGER,
                                        values = model_rank)]
 
         output_table = TableData(tableName = 'Antibody Structure Predictions',
