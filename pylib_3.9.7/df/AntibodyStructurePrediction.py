@@ -125,11 +125,11 @@ class AntibodyStructurePrediction(DataFunction):
                    ColumnData(name = 'Concatenated Chains (Heavy + Light)', dataType = HL_chain_data_type,
                               contentType = HL_chain_content_type, values = HL_chain_values, properties = HL_chain_props),
                    ColumnData(name = 'Original Sequence', dataType = DataType.STRING,
-                              contentType='chemical/x-sequence', values = orig_seq)]
+                              contentType='chemical/x-sequence', values = orig_seq),
                    ColumnData(name = 'Heavy Chain', dataType = DataType.STRING,
                               contentType = 'chemical/x-sequence', values = heavy_chain_seq),
                    ColumnData(name = 'Light Chain', dataType = DataType.STRING,
-                              contentType = 'chemical/x-sequence', values = light_chain_seq),
+                              contentType = 'chemical/x-sequence', values = light_chain_seq)]
 
         if save_all:
             columns[1:1] = [ColumnData(name = 'Model Number', dataType = DataType.INTEGER,
