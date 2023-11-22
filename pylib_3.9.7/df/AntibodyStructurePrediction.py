@@ -13,6 +13,9 @@ from ruse.bio.antibody import align_antibody_sequences, ANTIBODY_NUMBERING_COLUM
 from ruse.bio.bio_data_table_helper import sequence_to_genbank_base64_str
 
 from ImmuneBuilder import ABodyBuilder2
+from ImmuneBuilder.ABodyBuilder2 import header as ABB2_HEADER
+from ImmuneBuilder.refine import refine
+from ImmuneBuilder.util import add_errors_as_bfactors
 
 class AntibodyStructurePrediction(DataFunction):
     """
@@ -67,7 +70,6 @@ class AntibodyStructurePrediction(DataFunction):
         ids = []
         model_number = []
         model_rank = []
-        filenames = []
         orig_seq = []
         HL_concat_seq = []
         heavy_chain_seq = []
@@ -75,44 +77,52 @@ class AntibodyStructurePrediction(DataFunction):
         embedded_structures = []
 
         for ab_seq, ab_id in zip(ab_sequences, ab_ids):
-           ids.extend([ab_id] * row_multiplier)
-           orig_seq.extend([str(ab_seq.seq)] * row_multiplier)
+            ids.extend([ab_id] * row_multiplier)
+            orig_seq.extend([str(ab_seq.seq)] * row_multiplier)
 
-           # concatenated sequence is provided for heavy and light chains
-           # ABB algorithm identifies individual chains
-           sequences = {'H': str(ab_seq.seq).upper(), 'L': str(ab_seq.seq).upper()}
-           antibody = predictor.predict(sequences)
+            # concatenated sequence is provided for heavy and light chains
+            # ABB algorithm identifies individual chains
+            sequences = {'H': str(ab_seq.seq).upper(), 'L': str(ab_seq.seq).upper()}
+            antibody = predictor.predict(sequences)
 
-           heavy_chain_seq.extend([''.join(residue[1] for residue in antibody.numbered_sequences['H'])] * row_multiplier)
-           light_chain_seq.extend([''.join(residue[1] for residue in antibody.numbered_sequences['L'])] * row_multiplier)
-           HL_concat_seq.extend([''.join([heavy_chain_seq[-1], light_chain_seq[-1]])] * row_multiplier)
+            heavy_chain_seq.extend([''.join(residue[1] for residue in antibody.numbered_sequences['H'])] * row_multiplier)
+            light_chain_seq.extend([''.join(residue[1] for residue in antibody.numbered_sequences['L'])] * row_multiplier)
+            HL_concat_seq.extend([''.join([heavy_chain_seq[-1], light_chain_seq[-1]])] * row_multiplier)
 
-           best_filename = '_'.join([ab_id, 'predicted.pdb'])
+            if save_all:
+                model_number.extend([idx + 1 for idx in range(row_multiplier)])
+                model_rank.extend([idx + 1 for idx in antibody.ranking])
 
-           if save_all:
-               model_number.extend([idx + 1 for idx in range(row_multiplier)])
-               model_rank.extend([idx + 1 for idx in antibody.ranking])
-               dirname = os.path.join(output_dir, ab_id)
-               if refine_all:
-                   filenames.extend([os.path.join(dirname, f'{ab_id}_model{idx + 1}_rank{rank + 1}_refined.pdb')
-                                     for idx, rank in enumerate(antibody.ranking)])
-               else:
-                   filenames.extend([os.path.join(dirname, f'{ab_id}_model{idx + 1}_rank{rank + 1}_unrefined.pdb')
-                                     if rank != 0 else
-                                     os.path.join(dirname, f'{ab_id}_model{idx + 1}_rank{rank + 1}_refined.pdb')
-                                     for idx, rank in enumerate(antibody.ranking)])
+                for model_idx in range(len(antibody.atoms)):
+                    pdb_filename = ''.join([ab_id, f'_Model_{model_idx}_Rank_{antibody.ranking.index(model_idx)}.pdb'])
+                    antibody.save_single_unrefined(pdb_filename, index = model_idx)
+                    if refine_all or antibody.ranking[model_idx] == 0:
+                        refine(pdb_filename, pdb_filename, check_for_strained_bonds = True, n_threads = -1)
+                    add_errors_as_bfactors(pdb_filename, antibody.error_estimates.mean(0).sqrt().cpu().numpy(),
+                                           header = [ABB2_HEADER])
 
-               antibody.save_all(dirname, best_filename, filename_prefix = ab_id, refine_all = refine_all)
-           else:
-               filenames.append(os.path.join(output_dir, best_filename))
-               antibody.save(filenames[-1])
+                    # open the file, compress, and encode it
+                    with open(pdb_filename, 'r', encoding='utf-8') as pdb_file:
+                        pdb_data = pdb_file.read()
+                        pdb_zip = gzip.compress(pdb_data.encode())
+                        pdb_enc = base64.b64encode(pdb_zip).decode('utf8')
+                        embedded_structures.append(pdb_enc)
 
-            # open the file, compress, and encode it
-           with open(filenames[-1], 'r', encoding = 'utf-8') as pdb_file:
-               pdb_data = pdb_file.read()
-               pdb_zip = gzip.compress(pdb_data.encode())
-               pdb_enc = base64.b64encode(pdb_zip).decode('utf8')
-               embedded_structures.append(pdb_enc)
+                    if os.path.exists(pdb_filename):
+                        os.remove(pdb_filename)
+            else:
+                pdb_filename = '_'.join([ab_id, 'predicted.pdb'])
+                antibody.save(pdb_filename)
+
+                # open the file, compress, and encode it
+                with open(pdb_filename, 'r', encoding='utf-8') as pdb_file:
+                    pdb_data = pdb_file.read()
+                    pdb_zip = gzip.compress(pdb_data.encode())
+                    pdb_enc = base64.b64encode(pdb_zip).decode('utf8')
+                    embedded_structures.append(pdb_enc)
+
+                if os.path.exists(pdb_filename):
+                    os.remove(pdb_filename)
 
         # antibody numbering or not
         if do_numbering:
@@ -129,9 +139,6 @@ class AntibodyStructurePrediction(DataFunction):
 
         columns = [ColumnData(name = 'ID', dataType = DataType.STRING,
                               values = ids),
-                   ColumnData(name = 'Structure Files', dataType = DataType.STRING,
-                              contentType = 'chemical/x-uri', values = filenames,
-                              properties = {'Dimension': '3'}),
                    ColumnData(name = 'Compressed Structures', dataType = DataType.BINARY,
                               contentType = 'chemical/x-pdb', values = embedded_structures,
                               properties={'Dimension': '3'}),
