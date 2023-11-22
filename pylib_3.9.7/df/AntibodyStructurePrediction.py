@@ -61,8 +61,6 @@ class AntibodyStructurePrediction(DataFunction):
         num_scheme = string_input_field(request, 'uiNumberingScheme')
         cdr_def= string_input_field(request, 'uiCDRdef')
 
-        output_dir = string_input_field(request, 'uiOutputDirectory')
-
         # create an ABodyBuilder2 structure predictor with the selected numbering scheme
         predictor = ABodyBuilder2(numbering_scheme = num_scheme)
 
