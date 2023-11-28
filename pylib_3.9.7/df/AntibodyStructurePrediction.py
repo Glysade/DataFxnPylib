@@ -7,7 +7,8 @@ from Bio.SeqRecord import SeqRecord
 
 from df.bio_helper import column_to_sequences, string_to_sequence
 from df.data_transfer import ColumnData, TableData, DataFunctionRequest, DataFunctionResponse, DataFunction, DataType, \
-                             string_input_field, boolean_input_field, integer_input_field, input_field_to_column
+                             string_input_field, boolean_input_field, integer_input_field, input_field_to_column, \
+                             Notification, NotificationLevel
 
 from ruse.bio.antibody import align_antibody_sequences, ANTIBODY_NUMBERING_COLUMN_PROPERTY
 from ruse.bio.bio_data_table_helper import sequence_to_genbank_base64_str
@@ -74,6 +75,8 @@ class AntibodyStructurePrediction(DataFunction):
         light_chain_seq = []
         embedded_structures = []
 
+        notifications = []
+
         for ab_seq, ab_id in zip(ab_sequences, ab_ids):
             ids.extend([ab_id] * row_multiplier)
             orig_seq.extend([str(ab_seq.seq)] * row_multiplier)
@@ -81,7 +84,21 @@ class AntibodyStructurePrediction(DataFunction):
             # concatenated sequence is provided for heavy and light chains
             # ABB algorithm identifies individual chains
             sequences = {'H': str(ab_seq.seq).upper(), 'L': str(ab_seq.seq).upper()}
-            antibody = predictor.predict(sequences)
+            try:
+                antibody = predictor.predict(sequences)
+            except Exception as ex:
+                notifications.append(Notification(level = NotificationLevel.ERROR,
+                                                  title = 'Antibody Structure Prediction',
+                                                  summary = f'Error for ID {ab_id}',
+                                                  details = f'{ex.__class__} - {ex}'))
+                heavy_chain_seq.extend(['' for idx in range(row_multiplier)])
+                light_chain_seq.extend(['' for idx in range(row_multiplier)])
+                HL_concat_seq.extend(['' for idx in range(row_multiplier)])
+                embedded_structures.extend(['' for idx in range(row_multiplier)])
+                if save_all:  # keep the various lists in sync
+                    model_number.extend(['' for idx in range(row_multiplier)])
+                    model_rank.extend(['' for idx in range(row_multiplier)])
+                continue
 
             heavy_chain_seq.extend([''.join(residue[1] for residue in antibody.numbered_sequences['H'])] * row_multiplier)
             light_chain_seq.extend([''.join(residue[1] for residue in antibody.numbered_sequences['L'])] * row_multiplier)
@@ -93,11 +110,37 @@ class AntibodyStructurePrediction(DataFunction):
 
                 for model_idx in range(len(antibody.atoms)):
                     pdb_filename = ''.join([ab_id, f'_Model_{model_idx}_Rank_{antibody.ranking.index(model_idx)}.pdb'])
-                    antibody.save_single_unrefined(pdb_filename, index = model_idx)
-                    if refine_all or antibody.ranking[model_idx] == 0:
-                        refine(pdb_filename, pdb_filename, check_for_strained_bonds = True, n_threads = -1)
-                    add_errors_as_bfactors(pdb_filename, antibody.error_estimates.mean(0).sqrt().cpu().numpy(),
-                                           header = [ABB2_HEADER])
+                    error_caught = False
+                    try:
+                        antibody.save_single_unrefined(pdb_filename, index = model_idx)
+                        if refine_all or antibody.ranking[model_idx] == 0:
+                            refine(pdb_filename, pdb_filename, check_for_strained_bonds = True, n_threads = -1)
+                        add_errors_as_bfactors(pdb_filename, antibody.error_estimates.mean(0).sqrt().cpu().numpy(),
+                                               header = [ABB2_HEADER])
+
+                        # open the file, compress, and encode it
+                        with open(pdb_filename, 'r', encoding='utf-8') as pdb_file:
+                            pdb_data = pdb_file.read()
+                            pdb_zip = gzip.compress(pdb_data.encode())
+                            pdb_enc = base64.b64encode(pdb_zip).decode('utf8')
+                            embedded_structures.append(pdb_enc)
+                    except Exception as ex:
+                        embedded_structures.extend(['' for idx in range(row_multiplier)]) # keep lists in sync
+                        notifications.append(Notification(level=NotificationLevel.ERROR,
+                                                          title='Antibody Structure Prediction',
+                                                          summary=f'Error saving ID {ab_id}, model #{model_idx}',
+                                                          details=f'{ex.__class__} - {ex}'))
+                        error_caught = True
+                    finally:
+                        if os.path.exists(pdb_filename):
+                            os.remove(pdb_filename)
+                        if error_caught:
+                            continue
+            else:
+                pdb_filename = '_'.join([ab_id, 'predicted.pdb'])
+                error_caught = False
+                try:
+                    antibody.save(pdb_filename)
 
                     # open the file, compress, and encode it
                     with open(pdb_filename, 'r', encoding='utf-8') as pdb_file:
@@ -105,35 +148,38 @@ class AntibodyStructurePrediction(DataFunction):
                         pdb_zip = gzip.compress(pdb_data.encode())
                         pdb_enc = base64.b64encode(pdb_zip).decode('utf8')
                         embedded_structures.append(pdb_enc)
-
+                except Exception as ex:
+                    embedded_structures.append('') # keep lists in sync
+                    notifications.append(Notification(level=NotificationLevel.ERROR,
+                                                      title='Antibody Structure Prediction',
+                                                      summary=f'Error saving ID {ab_id}',
+                                                      details=f'{ex.__class__} - {ex}'))
+                    error_caught = True
+                finally:
                     if os.path.exists(pdb_filename):
                         os.remove(pdb_filename)
-            else:
-                pdb_filename = '_'.join([ab_id, 'predicted.pdb'])
-                antibody.save(pdb_filename)
-
-                # open the file, compress, and encode it
-                with open(pdb_filename, 'r', encoding='utf-8') as pdb_file:
-                    pdb_data = pdb_file.read()
-                    pdb_zip = gzip.compress(pdb_data.encode())
-                    pdb_enc = base64.b64encode(pdb_zip).decode('utf8')
-                    embedded_structures.append(pdb_enc)
-
-                if os.path.exists(pdb_filename):
-                    os.remove(pdb_filename)
+                    if error_caught:
+                        continue
 
         # antibody numbering or not
+        # assume not, and set standard values
+        HL_chain_values = HL_concat_seq
+        HL_chain_props = {}
+        HL_chain_content_type = 'chemical/x-sequence'
+        HL_chain_data_type = DataType.STRING
+
         if do_numbering:
-            HL_chain_values, HL_chain_props = self._antibody_numbering([string_to_sequence(s, index)
-                                                                        for index, s in enumerate(HL_concat_seq)],
-                                                                       num_scheme, cdr_def)
-            HL_chain_content_type = 'chemical/x-genbank'
-            HL_chain_data_type = DataType.BINARY
-        else:
-            HL_chain_values = HL_concat_seq
-            HL_chain_props = {}
-            HL_chain_content_type = 'chemical/x-sequence'
-            HL_chain_data_type = DataType.STRING
+            try:
+                HL_chain_values, HL_chain_props = self._antibody_numbering([string_to_sequence(s, index)
+                                                                            for index, s in enumerate(HL_concat_seq)],
+                                                                           num_scheme, cdr_def)
+                HL_chain_content_type = 'chemical/x-genbank'
+                HL_chain_data_type = DataType.BINARY
+            except:
+                notifications.append(Notification(level=NotificationLevel.ERROR,
+                                                  title='Antibody Structure Prediction - Antibody Numbering',
+                                                  summary=f'Error for ID {ab_id}',
+                                                  details=f'{ex.__class__} - {ex}'))
 
         columns = [ColumnData(name = 'ID', dataType = DataType.STRING,
                               values = ids),
@@ -158,4 +204,4 @@ class AntibodyStructurePrediction(DataFunction):
         output_table = TableData(tableName = 'Antibody Structure Predictions',
                                  columns = columns)
 
-        return DataFunctionResponse(outputTables = [output_table])
+        return DataFunctionResponse(outputTables = [output_table], notifications = notifications)
