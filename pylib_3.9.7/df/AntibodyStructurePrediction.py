@@ -91,13 +91,11 @@ class AntibodyStructurePrediction(DataFunction):
                                                   title = 'Antibody Structure Prediction',
                                                   summary = f'Error for ID {ab_id}',
                                                   details = f'{ex.__class__} - {ex}'))
-                heavy_chain_seq.extend(['' for idx in range(row_multiplier)])
-                light_chain_seq.extend(['' for idx in range(row_multiplier)])
-                HL_concat_seq.extend(['' for idx in range(row_multiplier)])
-                embedded_structures.extend(['' for idx in range(row_multiplier)])
-                if save_all:  # keep the various lists in sync
-                    model_number.extend(['' for idx in range(row_multiplier)])
-                    model_rank.extend(['' for idx in range(row_multiplier)])
+
+                # remove list elements for this broken item
+                ids = ids[:-row_multiplier]
+                orig_seq = orig_seq[:-row_multiplier]
+
                 continue
 
             heavy_chain_seq.extend([''.join(residue[1] for residue in antibody.numbered_sequences['H'])] * row_multiplier)
@@ -125,11 +123,20 @@ class AntibodyStructurePrediction(DataFunction):
                             pdb_enc = base64.b64encode(pdb_zip).decode('utf8')
                             embedded_structures.append(pdb_enc)
                     except Exception as ex:
-                        embedded_structures.extend(['' for idx in range(row_multiplier)]) # keep lists in sync
                         notifications.append(Notification(level=NotificationLevel.ERROR,
                                                           title='Antibody Structure Prediction',
                                                           summary=f'Error saving ID {ab_id}, model #{model_idx}',
                                                           details=f'{ex.__class__} - {ex}'))
+
+                        # remove list elements for this broken item
+                        ids = ids[:-row_multiplier]
+                        orig_seq = orig_seq[:-row_multiplier]
+                        heavy_chain_seq = heavy_chain_seq[:-row_multiplier]
+                        light_chain_seq = light_chain_seq[:-row_multiplier]
+                        HL_concat_seq = HL_concat_seq[:-row_multiplier]
+                        model_rank = model_rank[:-row_multiplier]
+                        model_number = model_number[:-row_multiplier]
+
                         error_caught = True
                     finally:
                         if os.path.exists(pdb_filename):
@@ -149,11 +156,20 @@ class AntibodyStructurePrediction(DataFunction):
                         pdb_enc = base64.b64encode(pdb_zip).decode('utf8')
                         embedded_structures.append(pdb_enc)
                 except Exception as ex:
-                    embedded_structures.append('') # keep lists in sync
                     notifications.append(Notification(level=NotificationLevel.ERROR,
                                                       title='Antibody Structure Prediction',
                                                       summary=f'Error saving ID {ab_id}',
                                                       details=f'{ex.__class__} - {ex}'))
+
+                    # remove list elements for this broken item
+                    ids = ids[:-row_multiplier]
+                    orig_seq = orig_seq[:-row_multiplier]
+                    heavy_chain_seq = heavy_chain_seq[:-row_multiplier]
+                    light_chain_seq = light_chain_seq[:-row_multiplier]
+                    HL_concat_seq = HL_concat_seq[:-row_multiplier]
+                    model_rank = model_rank[:-row_multiplier]
+                    model_number = model_number[:-row_multiplier]
+
                     error_caught = True
                 finally:
                     if os.path.exists(pdb_filename):
