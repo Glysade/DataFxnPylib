@@ -3,7 +3,7 @@
 data_transfer.py
 ================
 
-Copyright (C) 2022 Glysade, LLC
+Copyright (C) 2022, 2023 Glysade, LLC
 
 Data transfer model objects and utility functions for Glysade Python data functions
 
@@ -67,6 +67,20 @@ class InputFieldSelectorType(Enum):
     COLUMN = 'column'
     TABLE = 'table'
 
+
+class NotificationLevel(Enum):
+    """
+    An integer enum to specify the level of severity for a notification from Spotfire
+
+    Members:
+        * INFORMATION: Corresponds to a notification with a blue circle containing an exclamation point
+        * WARNING: Corresponds to a notification with a yellow triangle containing an exclamation point
+        * ERROR: Corresponds to a notification with a red circle containing an exclamation point
+    """
+
+    INFORMATION = 'information'
+    WARNING = 'warning'
+    ERROR = 'error'
 
 class InputField(BaseModel):
     """
@@ -223,6 +237,38 @@ class TableData(BaseModel):
     """
 
 
+class Notification(BaseModel):
+    """
+    Model class for notifications sent to the user through Spotfire notifyService.
+
+    Expected usage is to declare an object of Notification with values for construction:
+
+    notification = Notification(level = NotificationLevel.ERROR,
+                                title = 'BLAST Web Search',
+                                summary = 'No hits found',
+                                detail = 'No hits for any query sequences were found.  Data columns will be empty.'
+    """
+    level: NotificationLevel = None
+    """
+    The notification level, INFORMATION, WARNING, or ERROR
+    """
+
+    title: str = ''
+    """
+    The title displayed at the top of the notification
+    """
+
+    summary: str = ''
+    """
+    A concise summary of the notification
+    """
+
+    details: str = ''
+    """
+    A more thorough explanation of the notification.  Often, the text of an exception is used
+    """
+
+
 class DataFunctionRequest(BaseModel):
     """
     Model class for data function requests
@@ -273,6 +319,11 @@ class DataFunctionResponse(BaseModel):
     documentProperties: List[DataFunctionDocumentProperty] = []
     """
     An array of document properties (to add or update the current document properties)
+    """
+
+    notifications: List[Notification] = []
+    """
+    A list of Notification objects sent at the end of Data Function operation for user notifications
     """
 
 

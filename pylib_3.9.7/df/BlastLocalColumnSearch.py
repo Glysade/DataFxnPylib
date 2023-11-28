@@ -2,7 +2,8 @@ import os
 
 from df.BlastLocalTextSearch import run_blast_search
 from df.bio_helper import column_to_sequences
-from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResponse, string_input_field
+from df.data_transfer import DataFunction, DataFunctionRequest, DataFunctionResponse, string_input_field, \
+                             input_field_to_column
 
 
 class BlastLocalColumnSearch(DataFunction):
@@ -11,13 +12,20 @@ class BlastLocalColumnSearch(DataFunction):
     """
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
-        sequence_column_id = string_input_field(request, 'sequenceColumn')
-        id_column_id = string_input_field(request, 'idColumn')
-        sequence_column = request.inputColumns[sequence_column_id]
-        id_column = None if id_column_id is None else request.inputColumns[id_column_id]
+        # when marking/filtering is enabled, the name column ID
+        # is suffixed with _both, _filteredRows, _markedRow_<Marking ID>, or _both_<Marking ID>
+        # use helper function to access column to avoid ambiguity
+        sequence_column = input_field_to_column(request, 'sequenceColumn')
+        id_column = input_field_to_column(request, 'idColumn')
+
         input_sequences = column_to_sequences(sequence_column, id_column)
         input_sequences = [s for s in input_sequences if s]
+
         blastdb = string_input_field(request, 'blastDbPath')
         os.environ['BLASTDB'] = blastdb
-        return run_blast_search(input_sequences, request, 'Blast column search results', sequence_column.contentType,
+
+        response = run_blast_search(input_sequences, request, 'Blast column search results',
+                                sequence_column.contentType,
                                 True)
+
+        return response
