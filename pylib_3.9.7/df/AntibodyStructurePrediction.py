@@ -7,10 +7,10 @@ from Bio.SeqRecord import SeqRecord
 
 from df.bio_helper import column_to_sequences, string_to_sequence
 from df.data_transfer import ColumnData, TableData, DataFunctionRequest, DataFunctionResponse, DataFunction, DataType, \
-                             string_input_field, boolean_input_field, integer_input_field, input_field_to_column, \
+                             string_input_field, boolean_input_field, input_field_to_column, \
                              Notification, NotificationLevel
 
-from ruse.bio.antibody import align_antibody_sequences, ANTIBODY_NUMBERING_COLUMN_PROPERTY
+from ruse.bio.antibody import align_antibody_sequences, NumberingScheme, CDRDefinitionScheme, ANTIBODY_NUMBERING_COLUMN_PROPERTY
 from ruse.bio.bio_data_table_helper import sequence_to_genbank_base64_str
 
 from ImmuneBuilder import ABodyBuilder2
@@ -23,16 +23,16 @@ class AntibodyStructurePrediction(DataFunction):
     Predicts antibody structure from heavy and light chain sequences
     """
 
-    def _antibody_numbering(self, ab_sequences: list[Optional[SeqRecord]], num_scheme: str,
-                            cdr_def: str) -> (list[Optional[str]], dict):
+    def _antibody_numbering(self, ab_sequences: list[Optional[SeqRecord]], num_scheme: NumberingScheme,
+                            cdr_def: CDRDefinitionScheme) -> (list[Optional[str]], dict):
 
         if not cdr_def:
-            if num_scheme == 'imgt':
-                cdr_def = 'imgt'
-            elif num_scheme == 'kabat':
-                cdr_def = 'kabat'
+            if num_scheme == NumberingScheme.IMGT:
+                cdr_def = CDRDefinitionScheme.IMGT
+            elif num_scheme == NumberingScheme.KABAT:
+                cdr_def = CDRDefinitionScheme.KABAT
             else:
-                cdr_def = 'chothia'
+                cdr_def = CDRDefinitionScheme.CHOTHIA
 
         align_information = align_antibody_sequences(ab_sequences, num_scheme, cdr_def)
         output_sequences = align_information.aligned_sequences
@@ -60,7 +60,7 @@ class AntibodyStructurePrediction(DataFunction):
 
         do_numbering = boolean_input_field(request, 'uiDoNumbering')
         num_scheme = string_input_field(request, 'uiNumberingScheme')
-        cdr_def= string_input_field(request, 'uiCDRdef')
+        cdr_def = string_input_field(request, 'uiCDRdef')
 
         # create an ABodyBuilder2 structure predictor with the selected numbering scheme
         predictor = ABodyBuilder2(numbering_scheme = num_scheme)
@@ -89,8 +89,8 @@ class AntibodyStructurePrediction(DataFunction):
             except Exception as ex:
                 notifications.append(Notification(level = NotificationLevel.ERROR,
                                                   title = 'Antibody Structure Prediction',
-                                                  summary = f'Error for ID {ab_id}',
-                                                  details = f'{ex.__class__} - {ex}'))
+                                                  summary = f'Error for ID {ab_id}/n{ex.__class__} - {ex}',
+                                                  details = f'{ex.__traceback__}'))
 
                 # remove list elements for this broken item
                 ids = ids[:-row_multiplier]
@@ -125,8 +125,8 @@ class AntibodyStructurePrediction(DataFunction):
                     except Exception as ex:
                         notifications.append(Notification(level=NotificationLevel.ERROR,
                                                           title='Antibody Structure Prediction',
-                                                          summary=f'Error saving ID {ab_id}, model #{model_idx}',
-                                                          details=f'{ex.__class__} - {ex}'))
+                                                          summary=f'Error saving ID {ab_id}, model #{model_idx}/n{ex.__class__} - {ex}',
+                                                          details=f'{ex.__traceback__}'))
 
                         # remove list elements for this broken item
                         ids = ids[:-row_multiplier]
@@ -158,8 +158,8 @@ class AntibodyStructurePrediction(DataFunction):
                 except Exception as ex:
                     notifications.append(Notification(level=NotificationLevel.ERROR,
                                                       title='Antibody Structure Prediction',
-                                                      summary=f'Error saving ID {ab_id}',
-                                                      details=f'{ex.__class__} - {ex}'))
+                                                      summary=f'Error saving ID {ab_id}/n{ex.__class__} - {ex}',
+                                                      details=f'{ex.__traceback__}'))
 
                     # remove list elements for this broken item
                     ids = ids[:-row_multiplier]
@@ -178,7 +178,7 @@ class AntibodyStructurePrediction(DataFunction):
                         continue
 
         # antibody numbering or not
-        # assume not, and set standard values
+        # assume not, and set standard values for sequence column
         HL_chain_values = HL_concat_seq
         HL_chain_props = {}
         HL_chain_content_type = 'chemical/x-sequence'
@@ -188,14 +188,15 @@ class AntibodyStructurePrediction(DataFunction):
             try:
                 HL_chain_values, HL_chain_props = self._antibody_numbering([string_to_sequence(s, index)
                                                                             for index, s in enumerate(HL_concat_seq)],
-                                                                           num_scheme, cdr_def)
+                                                                           NumberingScheme.from_str(num_scheme),
+                                                                           CDRDefinitionScheme.from_str(cdr_def))
                 HL_chain_content_type = 'chemical/x-genbank'
                 HL_chain_data_type = DataType.BINARY
-            except:
+            except Exception as ex:
                 notifications.append(Notification(level=NotificationLevel.ERROR,
                                                   title='Antibody Structure Prediction - Antibody Numbering',
-                                                  summary=f'Error for ID {ab_id}',
-                                                  details=f'{ex.__class__} - {ex}'))
+                                                  summary=f'An unexpected error occurred\n{ex.__class__} - {ex}',
+                                                  details=f'{ex.__traceback__}'))
 
         columns = [ColumnData(name = 'ID', dataType = DataType.STRING,
                               values = ids),
