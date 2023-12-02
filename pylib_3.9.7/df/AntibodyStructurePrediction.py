@@ -1,6 +1,7 @@
 import base64
 import os
 import gzip
+import traceback
 from typing import Optional
 
 from Bio.SeqRecord import SeqRecord
@@ -90,7 +91,7 @@ class AntibodyStructurePrediction(DataFunction):
                 notifications.append(Notification(level = NotificationLevel.ERROR,
                                                   title = 'Antibody Structure Prediction',
                                                   summary = f'Error for ID {ab_id}/n{ex.__class__} - {ex}',
-                                                  details = f'{ex.__traceback__}'))
+                                                  details = f'{traceback.format_exc()}'))
 
                 # remove list elements for this broken item
                 ids = ids[:-row_multiplier]
@@ -126,7 +127,7 @@ class AntibodyStructurePrediction(DataFunction):
                         notifications.append(Notification(level=NotificationLevel.ERROR,
                                                           title='Antibody Structure Prediction',
                                                           summary=f'Error saving ID {ab_id}, model #{model_idx}/n{ex.__class__} - {ex}',
-                                                          details=f'{ex.__traceback__}'))
+                                                          details=f'{traceback.format_exc()}'))
 
                         # remove list elements for this broken item
                         ids = ids[:-row_multiplier]
@@ -159,7 +160,7 @@ class AntibodyStructurePrediction(DataFunction):
                     notifications.append(Notification(level=NotificationLevel.ERROR,
                                                       title='Antibody Structure Prediction',
                                                       summary=f'Error saving ID {ab_id}/n{ex.__class__} - {ex}',
-                                                      details=f'{ex.__traceback__}'))
+                                                      details=f'{traceback.format_exc()}'))
 
                     # remove list elements for this broken item
                     ids = ids[:-row_multiplier]
@@ -196,7 +197,7 @@ class AntibodyStructurePrediction(DataFunction):
                 notifications.append(Notification(level=NotificationLevel.ERROR,
                                                   title='Antibody Structure Prediction - Antibody Numbering',
                                                   summary=f'An unexpected error occurred\n{ex.__class__} - {ex}',
-                                                  details=f'{ex.__traceback__}'))
+                                                  details=f'{traceback.format_exc()}'))
 
         columns = [ColumnData(name = 'ID', dataType = DataType.STRING,
                               values = ids),
