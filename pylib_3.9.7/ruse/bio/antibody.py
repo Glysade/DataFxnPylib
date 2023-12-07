@@ -1,4 +1,5 @@
 import collections
+from enum import Enum  # consider enum.StrEnum for Python >= 3.11
 import json
 import os
 import re
@@ -62,6 +63,58 @@ class AntibodyNumberMapping(NamedTuple):
     def matches(self, number: AntibodyNumber) -> bool:
         return self.chain == number.chain and self.position == number.position and self.insertion and number.insertion
 
+class NumberingScheme(Enum):
+    """
+        An enum to specify the antibody numbering scheme
+
+        Members:
+            KABAT
+            CHOTHIA
+            IMGT
+            MARTIN
+            AHO
+    """
+
+    KABAT = 'kabat'
+    CHOTHIA  = 'chothia'
+    IMGT = 'imgt'
+    MARTIN = 'martin'
+    AHO = 'aho'
+
+    @classmethod
+    def from_str(cls, scheme: str):
+        if scheme.upper() not in cls.__members__:
+            raise NotImplementedError
+
+        return cls[scheme.upper()]
+
+    def __str__(self):
+        return self.value
+
+class CDRDefinitionScheme(Enum):
+    """
+        An enum to specify the antibody CDR definition scheme
+
+        Members:
+            KABAT
+            CHOTHIA
+            IMGT
+    """
+
+    KABAT = 'kabat'
+    CHOTHIA  = 'chothia'
+    IMGT = 'imgt'
+
+    @classmethod
+    def from_str(cls, scheme: str):
+        if scheme.upper() not in cls.__members__:
+            raise NotImplementedError
+
+        return cls[scheme.upper()]
+
+    def __str__(self):
+        return self.value
+
 
 class ChainRegions(NamedTuple):
     domain: int
@@ -102,16 +155,16 @@ class AntibodyAlignmentResult(NamedTuple):
     aligned_sequences: Optional[List[SeqRecord]]
     numbering: List[AntibodyNumber]
     regions: List[ChainRegions]
-    numbering_scheme: str
-    cdr_definition: str
+    numbering_scheme: NumberingScheme
+    cdr_definition: CDRDefinitionScheme
 
     def to_column_json(self) -> str:
         numbering_data = [{'domain': n.domain, 'position': n.query_position, 'label': n.label()} for n in
                           self.numbering]
         region_data = [r.to_data() for r in self.regions]
         antibody_numbering = {
-            'scheme': self.cdr_definition,
-            'numbering_scheme': self.numbering_scheme,
+            'scheme': str(self.cdr_definition),
+            'numbering_scheme': str(self.numbering_scheme),
             'numbering': numbering_data,
             'regions': region_data
         }
@@ -119,16 +172,16 @@ class AntibodyAlignmentResult(NamedTuple):
         return numbering_json
 
 
-def label_antibody_sequences(sequences: List[SeqRecord], numbering_scheme: str = 'kabat',
-                             cdr_definition: str = 'kabat') -> List[List[AntibodyNumberMapping]]:
+def label_antibody_sequences(sequences: List[SeqRecord], numbering_scheme: NumberingScheme = NumberingScheme.KABAT,
+                             cdr_definition: CDRDefinitionScheme = CDRDefinitionScheme.KABAT) -> List[List[AntibodyNumberMapping]]:
     mappings = _create_antibody_mappings(sequences, numbering_scheme)
     for mapping, sequence in zip(mappings, sequences):
         _annotate_sequence(sequence, mapping, numbering_scheme, cdr_definition)
     return mappings
 
 
-def align_antibody_sequences(sequences: List[SeqRecord], numbering_scheme: str = 'kabat',
-                             cdr_definition: str = 'kabat') -> AntibodyAlignmentResult:
+def align_antibody_sequences(sequences: List[SeqRecord], numbering_scheme: NumberingScheme = NumberingScheme.KABAT,
+                             cdr_definition: CDRDefinitionScheme = CDRDefinitionScheme.KABAT) -> AntibodyAlignmentResult:
     sequences = [SeqRecord(s.seq.ungap(), s.id, s.name, s.description) for s in sequences]
     mappings = label_antibody_sequences(sequences, numbering_scheme, cdr_definition)
     alignments = _do_align_antibody_sequences(sequences, mappings, numbering_scheme, cdr_definition)
@@ -136,8 +189,8 @@ def align_antibody_sequences(sequences: List[SeqRecord], numbering_scheme: str =
 
 
 def _do_align_antibody_sequences(sequences: List[SeqRecord],
-                                 mapping: List[List[AntibodyNumberMapping]], numbering_scheme: str,
-                                 cdr_definition: str) -> AntibodyAlignmentResult:
+                                 mapping: List[List[AntibodyNumberMapping]], numbering_scheme: NumberingScheme,
+                                 cdr_definition: CDRDefinitionScheme) -> AntibodyAlignmentResult:
     labellings = set()
     for seq_map in mapping:
         for pos in seq_map:
@@ -239,7 +292,7 @@ class AnarciDomain(NamedTuple):
     numbers: List[AntibodyNumberMapping]
 
 
-def _create_antibody_mappings(sequences: List[SeqRecord], numbering_scheme: str) -> List[
+def _create_antibody_mappings(sequences: List[SeqRecord], numbering_scheme: NumberingScheme) -> List[
     List[AntibodyNumberMapping]]:
     base = str(uuid.uuid4())
     in_file = 'seq_in_{}.fasta'.format(base)
@@ -248,7 +301,7 @@ def _create_antibody_mappings(sequences: List[SeqRecord], numbering_scheme: str)
 
     lines: List[str] = []
     if sequences:
-        command = AnarciCommandLine(cmd='ANARCI', sequence=in_file, scheme=numbering_scheme, outfile=out_file,
+        command = AnarciCommandLine(cmd='ANARCI', sequence=in_file, scheme=str(numbering_scheme), outfile=out_file,
                                     restrict='ig')
         stdout, stderr = command()
 
@@ -332,19 +385,19 @@ def _match_to_domain(record: SeqRecord, domain: AnarciDomain) -> List[AntibodyNu
     return mapping_to_record
 
 
-def _find_all_regions(mapping: List[AntibodyNumber], mapping_scheme: str,
-                      cdr_definition: str) -> List[ChainRegions]:
+def _find_all_regions(mapping: List[AntibodyNumber], numbering_scheme: NumberingScheme,
+                      cdr_definition: CDRDefinitionScheme) -> List[ChainRegions]:
     def regions_in_domain(domain):
         filtered_mapping = [m for m in mapping if m.domain == domain]
-        return _find_regions(filtered_mapping, mapping_scheme, cdr_definition)
+        return _find_regions(filtered_mapping, numbering_scheme, cdr_definition)
 
     domains = set((m.domain for m in mapping))
     regions = [i for d in domains for i in regions_in_domain(d) if i]
     return regions
 
 
-def _find_regions(mapping: List[AntibodyNumber], numbering_scheme: str,
-                  cdr_definition: str) -> List[Optional[ChainRegions]]:
+def _find_regions(mapping: List[AntibodyNumber], numbering_scheme: NumberingScheme,
+                  cdr_definition: CDRDefinitionScheme) -> List[Optional[ChainRegions]]:
     # see CDR definitions in http://www.bioinf.org.uk/abs/info.html#cdrdef
     # This table is a little unclear as the end of H1 is not specified if the numbering is neither Kabat or Chothia
     # I have assumed that we use Chothia for everything except Kabat
@@ -353,16 +406,17 @@ def _find_regions(mapping: List[AntibodyNumber], numbering_scheme: str,
     # cdr_definition assigns regions
 
     # the Wolfguy numbering is not supported
-    assert numbering_scheme in ['chothia', 'kabat', 'imgt', 'martin', 'aho']
-    assert cdr_definition in ['chothia', 'kabat', 'imgt']
+    assert numbering_scheme in [NumberingScheme.CHOTHIA, NumberingScheme.KABAT, NumberingScheme.IMGT,
+                                NumberingScheme.MARTIN, NumberingScheme.AHO]
+    assert cdr_definition in [CDRDefinitionScheme.CHOTHIA, CDRDefinitionScheme.KABAT, CDRDefinitionScheme.IMGT]
     regions = list()
 
-    if cdr_definition == 'kabat':
+    if cdr_definition == CDRDefinitionScheme.KABAT:
 
         r = _find_chain_regions(mapping, 'L', 'L24', 'L34', 'L50', 'L56', 'L89', 'L97')
         regions.append(r)
 
-        if numbering_scheme == 'kabat':
+        if numbering_scheme == CDRDefinitionScheme.KABAT:
             h1_end = 'H35B'
         else:
             h1_end = 'H35'
@@ -370,12 +424,12 @@ def _find_regions(mapping: List[AntibodyNumber], numbering_scheme: str,
         r = _find_chain_regions(mapping, 'H', 'H31', h1_end, 'H50', 'H65', 'H95', 'H102')
         regions.append(r)
 
-    elif cdr_definition == 'chothia':
+    elif cdr_definition == CDRDefinitionScheme.CHOTHIA:
 
         r = _find_chain_regions(mapping, 'L', 'L24', 'L34', 'L50', 'L56', 'L89', 'L97')
         regions.append(r)
 
-        if numbering_scheme == 'kabat':
+        if numbering_scheme == NumberingScheme.KABAT:
             h35a = _find_antibody_number(mapping, 'H35A')
             h35a_present = h35a and h35a.position == 35 and h35a.insertion == 'A'
             h35b = _find_antibody_number(mapping, 'H35B')
@@ -394,12 +448,12 @@ def _find_regions(mapping: List[AntibodyNumber], numbering_scheme: str,
         r = _find_chain_regions(mapping, 'H', 'H26', h1_end, 'H52', 'H56', 'H95', 'H102')
         regions.append(r)
 
-    elif cdr_definition == 'imgt':
+    elif cdr_definition == CDRDefinitionScheme.IMGT:
 
         r = _find_chain_regions(mapping, 'L', 'L27', 'L32', 'L50', 'L51', 'L89', 'L97')
         regions.append(r)
 
-        if numbering_scheme == 'kabat':
+        if numbering_scheme == NumberingScheme.KABAT:
             h1_end = 'H35B'
         else:
             h1_end = 'H33'
@@ -412,8 +466,8 @@ def _find_regions(mapping: List[AntibodyNumber], numbering_scheme: str,
     return regions
 
 
-def _annotate_sequence(record: SeqRecord, number_mapping: List[AntibodyNumberMapping], numbering_scheme: str,
-                       cdr_definition: str = None):
+def _annotate_sequence(record: SeqRecord, number_mapping: List[AntibodyNumberMapping], numbering_scheme: NumberingScheme,
+                       cdr_definition: CDRDefinitionScheme = None):
     def region_note(region_, name_):
         return ['antibody_label: {}'.format(name_),
                 'antibody_domain: {}'.format(region_.domain),
@@ -501,8 +555,8 @@ def numbering_and_regions_from_sequence(seq: SeqRecord) -> Optional[AntibodyAlig
     number_pattern = re.compile(r'^antibody_number: (\w+)$')
     label_pattern = re.compile(r'^([A-Z])(\d+)([A-Z]*)$')
 
-    cdr_definition: Optional[str] = None
-    numbering_scheme: Optional[str] = None
+    cdr_definition: Optional[CDRDefinitionScheme] = None
+    numbering_scheme: Optional[NumberingScheme] = None
     numbering: List[AntibodyNumber] = []
     for feature in seq.features:
         if feature.type != 'misc_feature':
