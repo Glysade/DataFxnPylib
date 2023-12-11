@@ -71,6 +71,8 @@ def genbank_base64_str_to_sequence(data: str, row_index: int) -> SeqRecord:
             genbank_str = value.decode(charset)
             with StringIO(genbank_str) as fh:
                 record = SeqIO.read(fh, 'gb')
+            if not record.id:
+                record.id = f'row_{row_index}'
             record.annotations['__row_index__'] = str(row_index)
             return record
         except UnicodeDecodeError:
