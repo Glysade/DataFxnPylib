@@ -8,7 +8,8 @@ Helper functions for data functions that manipulate biological sequences.
 `Biopython <https://biopython.org/>`_ SeqRecord objects are used to represent sequences
 
 """
-
+import base64
+import gzip
 from io import StringIO
 from typing import List, Optional
 
@@ -68,6 +69,40 @@ def sequences_to_column(sequences: List[Optional[SeqRecord]], column_name: str, 
     else:
         return ColumnData(name=column_name, dataType=DataType.STRING, contentType='chemical/x-sequence', values=values)
 
+def column_to_structures(column: ColumnData, id_column: Optional[ColumnData] = None) -> List[Optional[SeqRecord]]:
+    """
+    Converts a Spotfire column into a list of PDB files
+
+    :param column:  the Spotfire column
+    :param id_column:  if set, row values from this column are used to set the sequence identifier
+
+    :return: sequence records
+    """
+    content_type = column.contentType
+    if content_type != 'chemical/x-pdb':
+        raise ValueError(f'Unable to process content type {content_type} as Structure Column.')
+
+    structures = []
+
+    try:
+        for index, data in enumerate(column.values):
+            pdb_zip = base64.b64decode(data)
+            pdb_data = gzip.decompress(pdb_zip).decode()
+            structures.append(pdb_data)
+
+        # if id_column:
+        #     for seq, seq_id in zip(sequences, id_column.values):
+        #         if seq and id:
+        #             seq.id = seq_id
+    except:
+        structures.append(None)
+
+    # except Exception as ex:
+    #     notifications.append(Notification(level=NotificationLevel.ERROR,
+    #                                       title='Antibody Structure Prediction',
+    #                                       summary=f'Error saving ID {ab_id}, model #{model_idx}/n{ex.__class__} - {ex}',
+    #                                       details=f'{traceback.format_exc()}'))
+    return structures
 
 def query_from_request(request: DataFunctionRequest, input_field_name: str = 'query') -> SeqRecord:
     """
