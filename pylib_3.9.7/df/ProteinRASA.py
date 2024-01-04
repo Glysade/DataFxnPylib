@@ -35,6 +35,8 @@ class ProteinRASA(DataFunction):
 
         rasa_cutoff = integer_input_field(request, 'uiRASACutoff')
 
+        color = "#BD63C2"  # need to add color selector
+
         # setup BioPython tools
         sr = ShrakeRupley()
         parser = PDBParser(QUIET = True)
@@ -70,24 +72,27 @@ class ProteinRASA(DataFunction):
 
                 in_context_sa = sum([atom.sasa for atom in residue.get_atoms() if atom.get_id() not in backbone_atoms])
                 reference_sa = sum([atom.sasa for atom in residue_copy.get_atoms() if atom.get_id() not in backbone_atoms])
+                rasa = round(in_context_sa / reference_sa, 2) * 100
 
                 # create annotations
-                feature = SeqFeature(FeatureLocation(residue_index + 1, residue_index + 1),
-                                     type = 'misc_feature',
-                                     qualifiers = {'note': ['glysade_annotation_type: RASA',
-                                                            f'RASA: {round(in_context_sa / reference_sa, 2) / 100}%',
-                                                            f'Residue ID:  {residue.resname}',
-                                                            f'"ld_style:{{"color": "{color}", "shape": "rounded-rectangle"}}"']})
-                sequence.features.append(feature)
+                if rasa >= rasa_cutoff:
+                    feature = SeqFeature(FeatureLocation(residue_index + 1, residue_index + 1),
+                                         type = 'misc_feature',
+                                         qualifiers = {'note': ['glysade_annotation_type: RASA',
+                                                                f'RASA: {rasa}%',
+                                                                f'Residue ID:  {residue.resname}',
+                                                                f'"ld_style:{{"color": "{color}", "shape": "rounded-rectangle"}}"']})
+                    sequence.features.append(feature)
 
             output_sequences.append(sequence)
 
-        # contruct output column
+        # construct output column
         rows = [sequence_to_genbank_base64_str(s) for s in output_sequences]
         output_column = ColumnData(name = f'Relative Accessible Surface Area Annotations',
                                    dataType = DataType.BINARY,
                                    contentType = 'chemical/x-genbank', values = rows)
-        return DataFunctionResponse(outputColumns=[output_column])
+
+        return DataFunctionResponse(outputColumns = [output_column])
 
         #     except Exception as ex:
         #         notifications.append(Notification(level = NotificationLevel.ERROR,
