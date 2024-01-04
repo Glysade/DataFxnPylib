@@ -9,6 +9,7 @@ from Bio.SeqRecord import SeqRecord
 from Bio.PDB import PDBParser
 from Bio.PDB.SASA import ShrakeRupley
 from Bio.SeqFeature import SeqFeature, FeatureLocation
+from Bio.SeqUtils import seq1 as amino3to1
 
 from df.bio_helper import column_to_sequences, string_to_sequence, column_to_structures
 from df.data_transfer import ColumnData, TableData, DataFunctionRequest, DataFunctionResponse, DataFunction, DataType, \
@@ -35,7 +36,9 @@ class ProteinRASA(DataFunction):
 
         rasa_cutoff = integer_input_field(request, 'uiRASACutoff')
 
-        color = "#BD63C2"  # need to add color selector
+        exposedColor = string_input_field(request, 'uiExposedColor')
+        labelAll = boolean_input_field(request, 'uiLabelAll')
+        allColor = string_input_field(request, 'uiAllColor')
 
         # setup BioPython tools
         sr = ShrakeRupley()
@@ -58,9 +61,23 @@ class ProteinRASA(DataFunction):
                                                   title = 'Relative Accessible Surface Area',
                                                   summary = f'Error for structure {identifier}/nNull values found.',
                                                   details = f'Either the structure or sequence were null.'))
+                continue
 
             with StringIO(structures[index]) as structure_fh:
                 structure = parser.get_structure(identifier, structure_fh)
+
+            # create a mapping between the structure residues and potentially gapped sequence residues
+            # would this be a useful biotools function rather than buried here?
+            sequence_number_mapping = {}
+            structure_residue_number = 0
+            structure_residues = [amino3to1(res.get_resname()) for res in structure.get_residues()]
+            for sequence_residue_number, sequence_residue in enumerate(sequence.seq):
+                if sequence_residue != '-':
+                    if sequence_residue != structure_residues[structure_residue_number]:
+                        # send a notification and then fail
+                        pass
+                    sequence_number_mapping[structure_residue_number] = sequence_residue_number
+                    structure_residue_number += 1
 
             # compute RASA for each residue/atom in context of the intact protein
             sr.compute(structure, level = 'A')
@@ -75,13 +92,28 @@ class ProteinRASA(DataFunction):
                 rasa = round(in_context_sa / reference_sa, 2) * 100
 
                 # create annotations
-                if rasa >= rasa_cutoff:
-                    feature = SeqFeature(FeatureLocation(residue_index + 1, residue_index + 1),
+                if labelAll:
+                    feature = SeqFeature(FeatureLocation(sequence_number_mapping[residue_index],
+                                                         sequence_number_mapping[residue_index] + 1),
                                          type = 'misc_feature',
-                                         qualifiers = {'note': ['glysade_annotation_type: RASA',
+                                         qualifiers = {'feature_name': 'Relative Accessible Surface Area',
+                                                       'note': ['RASA',
+                                                                'glysade_annotation_type: RASA',
                                                                 f'RASA: {rasa}%',
                                                                 f'Residue ID:  {residue.resname}',
-                                                                f'"ld_style:{{"color": "{color}", "shape": "rounded-rectangle"}}"']})
+                                                                f'ld_style:{{"color": "{allColor}", "shape": "rounded-rectangle"}}']})
+                    sequence.features.append(feature)
+
+                if rasa >= rasa_cutoff:
+                    feature = SeqFeature(FeatureLocation(sequence_number_mapping[residue_index],
+                                                         sequence_number_mapping[residue_index] + 1),
+                                         type = 'misc_feature',
+                                         qualifiers = {'feature_name': 'Solvent Exposed Residue',
+                                                       'note': ['Exposed',
+                                                                'glysade_annotation_type: RASA',
+                                                                f'RASA: {rasa}%',
+                                                                f'Residue ID:  {residue.resname}',
+                                                                f'ld_style:{{"color": "{exposedColor}", "shape": "rounded-rectangle"}}']})
                     sequence.features.append(feature)
 
             output_sequences.append(sequence)
