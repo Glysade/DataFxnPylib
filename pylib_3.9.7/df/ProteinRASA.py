@@ -26,10 +26,11 @@ class ProteinRASA(DataFunction):
 
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
 
+        # get settings from UI
         id_column = input_field_to_column(request, 'uiIDColumn')
 
         structure_column = input_field_to_column(request, 'uiStructureColumn')
-        structures = column_to_structures(structure_column, id_column)
+        structures, notifications = column_to_structures(structure_column, id_column)
 
         sequence_column = input_field_to_column(request, 'uiSequenceColumn')
         sequences = column_to_sequences(sequence_column, id_column)
@@ -42,29 +43,19 @@ class ProteinRASA(DataFunction):
 
         # setup BioPython tools
         sr = ShrakeRupley()
-        parser = PDBParser(QUIET = True)
         backbone_atoms = ['N', 'H', 'CA', 'HA', 'C', 'O', 'H2', 'H3']
 
         # output storage
-        notifications = []
         output_sequences = []
 
         # process each structure
         for index, (structure, sequence) in enumerate(zip(structures, sequences)):
-            if id_column:
-                identifier = id_column.values[index]
-            else:
-                identifier = index
-
             if not (structure and sequence):
                 notifications.append(Notification(level = NotificationLevel.ERROR,
                                                   title = 'Relative Accessible Surface Area',
                                                   summary = f'Error for structure {identifier}/nNull values found.',
                                                   details = f'Either the structure or sequence were null.'))
                 continue
-
-            with StringIO(structures[index]) as structure_fh:
-                structure = parser.get_structure(identifier, structure_fh)
 
             # create a mapping between the structure residues and potentially gapped sequence residues
             # would this be a useful biotools function rather than buried here?
@@ -89,7 +80,7 @@ class ProteinRASA(DataFunction):
 
                 in_context_sa = sum([atom.sasa for atom in residue.get_atoms() if atom.get_id() not in backbone_atoms])
                 reference_sa = sum([atom.sasa for atom in residue_copy.get_atoms() if atom.get_id() not in backbone_atoms])
-                rasa = round(in_context_sa / reference_sa, 2) * 100
+                rasa = round(in_context_sa / reference_sa * 100, 1)
 
                 # create annotations
                 if labelAll:
