@@ -11,7 +11,7 @@ from Bio.PDB.SASA import ShrakeRupley
 from Bio.SeqFeature import SeqFeature, FeatureLocation
 from Bio.SeqUtils import seq1 as amino3to1
 
-from df.bio_helper import column_to_sequences, string_to_sequence, column_to_structures
+from df.bio_helper import column_to_sequences, string_to_sequence, column_to_structures, generate_color_gradient
 from df.data_transfer import ColumnData, TableData, DataFunctionRequest, DataFunctionResponse, DataFunction, DataType, \
                              string_input_field, boolean_input_field, integer_input_field,  input_field_to_column, \
                              Notification, NotificationLevel
@@ -27,19 +27,21 @@ class ProteinRASA(DataFunction):
     def execute(self, request: DataFunctionRequest) -> DataFunctionResponse:
 
         # get settings from UI
-        id_column = input_field_to_column(request, 'uiIDColumn')
-
         structure_column = input_field_to_column(request, 'uiStructureColumn')
-        structures, notifications = column_to_structures(structure_column, id_column)
+        structures, notifications = column_to_structures(structure_column)
 
         sequence_column = input_field_to_column(request, 'uiSequenceColumn')
-        sequences = column_to_sequences(sequence_column, id_column)
+        sequences = column_to_sequences(sequence_column)
 
         rasa_cutoff = integer_input_field(request, 'uiRASACutoff')
-
         exposedColor = string_input_field(request, 'uiExposedColor')
+
         labelAll = boolean_input_field(request, 'uiLabelAll')
-        allColor = string_input_field(request, 'uiAllColor')
+        startColor = string_input_field(request, 'uiStartColor')
+        endColor = string_input_field(request, 'uiEndColor')
+
+        if labelAll:
+            RASA_color_gradient = generate_color_gradient(startColor, endColor, 21)
 
         # setup BioPython tools
         sr = ShrakeRupley()
@@ -53,7 +55,7 @@ class ProteinRASA(DataFunction):
             if not (structure and sequence):
                 notifications.append(Notification(level = NotificationLevel.ERROR,
                                                   title = 'Relative Accessible Surface Area',
-                                                  summary = f'Error for structure {identifier}/nNull values found.',
+                                                  summary = f'Error for structure or sequence in Row {index}/nNull values found.',
                                                   details = f'Either the structure or sequence were null.'))
                 continue
 
@@ -92,7 +94,7 @@ class ProteinRASA(DataFunction):
                                                                 'glysade_annotation_type: RASA',
                                                                 f'RASA: {rasa}%',
                                                                 f'Residue ID:  {residue.resname}',
-                                                                f'ld_style:{{"color": "{allColor}", "shape": "rounded-rectangle"}}']})
+                                                                f'ld_style:{{"color": "{RASA_color_gradient[int(rasa // 5)]}", "shape": "rounded-rectangle"}}']})
                     sequence.features.append(feature)
 
                 if rasa >= rasa_cutoff:

@@ -145,3 +145,32 @@ def query_from_request(request: DataFunctionRequest, input_field_name: str = 'qu
         sequence = SeqRecord(Seq(query), 'Query')
 
     return sequence
+
+def generate_color_gradient(start_color, end_color, num_steps):
+    """
+    Extract RGB components from hex values
+
+    :param start_color: hex color for start of gradient
+    :param end_color: hex color for end of gradient
+    :param num_steps: number of color steps in gradient
+    :return: a list of hex colors constituting the gradient
+    """
+
+    start_rgb = [int(start_color[i:i+2], 16) / 255.0 for i in (1, 3, 5)]
+    end_rgb = [int(end_color[i:i+2], 16) / 255.0 for i in (1, 3, 5)]
+
+    # Calculate step size for each RGB component
+    r_step = (end_rgb[0] - start_rgb[0]) / (num_steps - 1)
+    g_step = (end_rgb[1] - start_rgb[1]) / (num_steps - 1)
+    b_step = (end_rgb[2] - start_rgb[2]) / (num_steps - 1)
+
+    # Generate a linear gradient in RGB space
+    color_gradient = [
+        '#{0:02x}{1:02x}{2:02x}'.format(
+            int((start_rgb[0] + i * r_step) * 255),
+            int((start_rgb[1] + i * g_step) * 255),
+            int((start_rgb[2] + i * b_step) * 255)
+        ) for i in range(num_steps)
+    ]
+
+    return color_gradient
