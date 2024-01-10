@@ -73,12 +73,31 @@ class ProteinRASA(DataFunction):
                     structure_residue_number += 1
 
             # compute RASA for each residue/atom in context of the intact protein
-            sr.compute(structure, level = 'A')
+            try:
+                sr.compute(structure, level = 'A')
+            except Exception as ex:
+                notifications.append(Notification(level = NotificationLevel.ERROR,
+                                                  title = 'Relative Accessible Surface Area',
+                                                  summary = f'Error for structure in Row {index}.\n' +
+                                                            'Shrake-Rupley calculation failed for complete structure.',
+                                                  details = f'{ex.__class__} - {ex}\n' +
+                                                            f'{traceback.format_exc()}'))
+                output_sequences.append(sequence)
+                continue
 
+            success = True  # for scoping outside loop
             for residue_index, residue in enumerate(structure.get_residues()):
                 # compute RASA for each residue isolated from the protein structure
                 residue_copy = residue.copy()
-                sr.compute(residue_copy, level = 'A')
+
+                success = True  # optimistic for success
+                ex_storage = None  # use for possible storage of exception for use outside loop
+                try:
+                    sr.compute(residue_copy, level = 'A')
+                except Exception as ex:
+                    ex_storage = ex.copy()
+                    success = False
+                    continue
 
                 in_context_sa = sum([atom.sasa for atom in residue.get_atoms() if atom.get_id() not in backbone_atoms])
                 reference_sa = sum([atom.sasa for atom in residue_copy.get_atoms() if atom.get_id() not in backbone_atoms])
@@ -109,6 +128,13 @@ class ProteinRASA(DataFunction):
                                                                 f'ld_style:{{"color": "{exposedColor}", "shape": "rounded-rectangle"}}']})
                     sequence.features.append(feature)
 
+            if not success:
+                notifications.append(Notification(level = NotificationLevel.ERROR,
+                                                  title = 'Relative Accessible Surface Area',
+                                                  summary = f'Error for structure in Row {index}.\n' +
+                                                            f'Shrake-Rupley calculation failed for for some residues.',
+                                                  details = f'Example error: {ex.__class__} - {ex}\n' +
+                                                            f'{traceback.format_exc()}'))
             output_sequences.append(sequence)
 
         # construct output column
@@ -118,10 +144,3 @@ class ProteinRASA(DataFunction):
                                    contentType = 'chemical/x-genbank', values = rows)
 
         return DataFunctionResponse(outputColumns = [output_column])
-
-        #     except Exception as ex:
-        #         notifications.append(Notification(level = NotificationLevel.ERROR,
-        #                                           title = 'Antibody Structure Prediction',
-        #                                           summary = f'Error for ID {ab_id}/n{ex.__class__} - {ex}',
-        #                                           details = f'{traceback.format_exc()}'))
-        #
