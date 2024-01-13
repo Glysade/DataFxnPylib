@@ -113,7 +113,8 @@ class ProteinRASA(DataFunction):
                                                                 'glysade_annotation_type: RASA',
                                                                 f'RASA: {rasa}%',
                                                                 f'Residue ID:  {residue.resname}',
-                                                                f'ld_style:{{"color": "{RASA_color_gradient[int(rasa // 5)]}", "shape": "rounded-rectangle"}}']})
+                                                                f'ld_style:{{"color": "{RASA_color_gradient[int(rasa // 5)]}", "shape": "rounded-rectangle"}}',
+                                                                'ld_track: RASA']})
                     sequence.features.append(feature)
 
                 if rasa >= rasa_cutoff:
@@ -121,11 +122,12 @@ class ProteinRASA(DataFunction):
                                                          sequence_number_mapping[residue_index] + 1),
                                          type = 'misc_feature',
                                          qualifiers = {'feature_name': 'Solvent Exposed Residue',
-                                                       'note': ['Exposed',
-                                                                'glysade_annotation_type: RASA',
+                                                       'note': [f'Exposed >= {rasa_cutoff}',
+                                                                'glysade_annotation_type: RASA_exposed',
                                                                 f'RASA: {rasa}%',
                                                                 f'Residue ID:  {residue.resname}',
-                                                                f'ld_style:{{"color": "{exposedColor}", "shape": "rounded-rectangle"}}']})
+                                                                f'ld_style:{{"color": "{exposedColor}", "shape": "rounded-rectangle"}}',
+                                                                'ld_track: RASA_exposed']})
                     sequence.features.append(feature)
 
             if not success:
