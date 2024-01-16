@@ -68,7 +68,11 @@ class ProteinRASA(DataFunction):
                 if sequence_residue != '-':
                     if sequence_residue != structure_residues[structure_residue_number]:
                         # send a notification and then fail
-                        pass
+                        notifications.append(Notification(level = NotificationLevel.ERROR,
+                                                          title = 'Relative Accessible Surface Area',
+                                                          summary = f'Error for structure and sequence in Row {index}.',
+                                                          details = f'Sequences in structure do not match those in sequence column.'))
+                        continue
                     sequence_number_mapping[structure_residue_number] = sequence_residue_number
                     structure_residue_number += 1
 
