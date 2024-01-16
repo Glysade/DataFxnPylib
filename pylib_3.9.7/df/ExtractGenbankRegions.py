@@ -81,16 +81,11 @@ class ExtractGenbankRegions(DataFunction):
 
         # first find all regions - dict preserves order
         region_names_dict: Dict[str] = {}
-        finished = False  # finished is never changed to True
         for sequence, sequence_id in zip(input_sequences, sequence_ids_no_nulls):
-            if finished:
-                break  # this may never run since finished is never True
             if not sequence:
                 continue
             feature: SeqFeature
             for feature in sequence.features:
-                if finished:
-                    break  # this may never run since finished is never True
                 name = _feature_to_name(feature, feature_key, feature_qualifier)
                 if name and name not in region_names_dict:
                     region_names_dict[name] = None
